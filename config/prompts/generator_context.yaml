@@ -1,0 +1,20 @@
+# 带上下文的生成 Prompt 模板
+version: 1
+purpose: "将 System Prompt + 用户查询 + 记忆片段 + 时间上下文 组装成最终生成 Prompt"
+changelog:
+  - "v1: 四层结构（System Prompt → 查询 → 记忆 → 指令），每片段带时间戳+参与者，最多 5 个片段"
+
+# 此模板包含占位符，使用时通过 Python format 填充
+# 占位符: {system_prompt}, {user_context}, {query}, {temporal_context}, {context}, {instruction}
+prompt: |
+  {system_prompt}
+
+  {user_context}
+  用户查询：{query}
+
+  相关记忆的时间范围：{temporal_context}
+
+  相关记忆片段：
+  {context}
+
+  {instruction}

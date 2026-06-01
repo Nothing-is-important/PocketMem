@@ -1,0 +1,17 @@
+# Router 意图分类 Prompt
+version: 2
+purpose: "将用户查询分为 4 类意图：memory_lookup / knowledge_lookup / general / refuse"
+changelog:
+  - "v1: JSON 输出格式 {\"intent\": \"...\", \"confidence\": 0.9}。问题：1.5B 模型 JSON 不稳定，解析成功率 70%"
+  - "v2: 改为单字输出 + 关键词兜底。极简格式减少解析失败，关键词规则补偿小模型分类不准"
+
+prompt: |
+  分析用户查询意图，只回复一个词：memory_lookup、knowledge_lookup、general 或 refuse。
+
+  - memory_lookup: 关于过去对话、人物、事件（如"张三说了什么"、"团建讨论了什么"、"谁推荐了餐厅"）
+  - knowledge_lookup: 关于笔记、文档、学习资料（如"笔记里写了什么"、"论文结论"、"怎么做量化"）
+  - general: 闲聊、问候、不涉及个人记忆和知识（如"你好"、"今天天气"）
+  - refuse: 不适当或无法回答
+
+  查询：{query}
+  意图：

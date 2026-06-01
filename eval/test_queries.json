@@ -1,0 +1,62 @@
+[
+    {
+        "query": "张三推荐的那家火锅店叫什么名字？",
+        "relevant_ids": [],
+        "expected_keywords": ["渝味火锅", "朝阳区", "建国路"],
+        "type": "memory_lookup"
+    },
+    {
+        "query": "团建大家都提了哪些地点？",
+        "relevant_ids": [],
+        "expected_keywords": ["密云水库", "古北水镇", "十渡"],
+        "type": "memory_lookup"
+    },
+    {
+        "query": "我的笔记里关于Transformer架构写了什么？",
+        "relevant_ids": [],
+        "expected_keywords": ["自注意力", "多头注意力", "位置编码", "Layer Normalization"],
+        "type": "knowledge_lookup"
+    },
+    {
+        "query": "端侧推理优化有哪些方法？",
+        "relevant_ids": [],
+        "expected_keywords": ["量化", "Chunk Prefill", "KV Cache", "ONNX Runtime"],
+        "type": "knowledge_lookup"
+    },
+    {
+        "query": "李四面试了哪家公司？结果怎么样？",
+        "relevant_ids": [],
+        "expected_keywords": ["offer", "三轮"],
+        "type": "memory_lookup"
+    },
+    {
+        "query": "上次讨论项目需求时，决定把什么功能放到下个迭代？",
+        "relevant_ids": [],
+        "expected_keywords": ["MVP"],
+        "type": "memory_lookup"
+    },
+    {
+        "query": "关于Agent开发，我的笔记里记录了哪些架构模式？",
+        "relevant_ids": [],
+        "expected_keywords": ["ReAct", "Plan-Execute", "Multi-Agent"],
+        "type": "knowledge_lookup"
+    },
+    {
+        "query": "PTRM多轨迹推理的核心思想是什么？",
+        "relevant_ids": [],
+        "expected_keywords": ["高斯噪声", "轨迹", "投票"],
+        "type": "knowledge_lookup"
+    },
+    {
+        "query": "周末和谁约了打篮球？",
+        "relevant_ids": [],
+        "expected_keywords": [],
+        "type": "memory_lookup"
+    },
+    {
+        "query": "最近一个月的团建计划定了吗？去哪里？",
+        "relevant_ids": [],
+        "expected_keywords": [],
+        "type": "memory_lookup"
+    }
+]

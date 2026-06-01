@@ -1,0 +1,12 @@
+# 无上下文时的生成 Prompt 模板
+version: 1
+purpose: "当检索结果为空时使用的兜底 Prompt"
+changelog:
+  - "v1: 初始版本"
+
+prompt: |
+  {system_prompt}
+
+  用户查询：{query}
+
+  注意：未找到相关的聊天记录或笔记。请诚实告知用户，并建议用户提供更多信息。

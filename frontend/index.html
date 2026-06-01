@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PocketMemory - 端侧个人记忆助手</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23161b22'/><text x='50' y='68' font-size='56' text-anchor='middle' dominant-baseline='middle'>🧠</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   OpenCode-inspired Dark Theme
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --bg: #0d1117;
+  --bg-elevated: #161b22;
+  --bg-overlay: #21262d;
+  --border: #30363d;
+  --border-subtle: rgba(255,255,255,0.06);
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-tertiary: #6e7681;
+  --accent: #58a6ff;
+  --accent-dim: rgba(88,166,255,0.15);
+  --green: #3fb950;
+  --green-dim: rgba(63,185,80,0.15);
+  --orange: #d2991d;
+  --orange-dim: rgba(210,153,29,0.15);
+  --red: #f85149;
+  --red-dim: rgba(248,81,73,0.15);
+  --purple: #a371f7;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --transition: 150ms ease;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 260px 1fr;
+  grid-template-areas:
+    "header header"
+    "sidebar main";
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Header
+   ═══════════════════════════════════════════════════════════ */
+.header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  height: 44px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header-logo {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.badge-online {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.badge-offline {
+  background: var(--border);
+  color: var(--text-secondary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Left Sidebar — Data Source Management (non-collapsible)
+   ═══════════════════════════════════════════════════════════ */
+.sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.sidebar-header {
+  flex-shrink: 0;
+  padding: 12px 12px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.sidebar-count {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+}
+.sidebar-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+.sidebar-btn {
+  flex: 1;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  text-align: center;
+  font-family: inherit;
+}
+.sidebar-btn:hover {
+  border-color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+.sidebar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.sidebar-btn.primary {
+  border-color: var(--green);
+  color: var(--green);
+}
+.sidebar-btn.primary:hover {
+  background: var(--green-dim);
+}
+.sidebar-status {
+  flex-shrink: 0;
+  padding: 0 12px 4px;
+  font-size: 11px;
+  min-height: 18px;
+}
+.sidebar-status .ok { color: var(--green); }
+.sidebar-status .err { color: var(--red); }
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+.sidebar-section {
+  margin-bottom: 10px;
+}
+.sidebar-list-header {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.source-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: background var(--transition);
+  cursor: default;
+}
+.source-item:hover {
+  background: var(--bg-overlay);
+}
+.source-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+.source-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-chunks {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.sidebar-empty {
+  padding: 16px 8px;
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.5;
+  text-align: center;
+}
+.sidebar-empty code {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--surface);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  margin: 0 2px;
+}
+.sidebar-empty-inline {
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text3);
+  text-align: center;
+  font-style: italic;
+}
+.sidebar-empty code {
+  background: var(--bg-overlay);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Main Content Area
+   ═══════════════════════════════════════════════════════════ */
+.main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Chat Window ── */
+.chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 8px;
+  min-height: 0;
+}
+.msg {
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  animation: slideIn 0.25s ease;
+  font-size: 13.5px;
+  line-height: 1.6;
+  max-width: 85%;
+}
+.msg.user {
+  background: var(--bg-overlay);
+  margin-left: auto;
+  border: 1px solid var(--border-subtle);
+}
+.msg.assistant {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
+.msg .sender {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-bottom: 3px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.msg.thinking {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  max-width: 100%;
+}
+
+/* ── Progress / Pipeline Section ── */
+.progress-section {
+  flex-shrink: 0;
+  padding: 8px 20px 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+.pipeline {
+  display: flex;
+  gap: 4px;
+}
+.pipe-node {
+  flex: 1;
+  padding: 5px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  text-align: center;
+  font-size: 10px;
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.pipe-node .node-icon {
+  font-size: 12px;
+}
+.pipe-node .node-label {
+  color: var(--text-tertiary);
+}
+.pipe-node.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  animation: glowPulse 1.5s infinite;
+}
+.pipe-node.active .node-label {
+  color: var(--accent);
+}
+.pipe-node.done {
+  border-color: var(--green);
+  background: var(--green-dim);
+}
+.pipe-node.done .node-label {
+  color: var(--green);
+}
+.pipe-latency {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  margin-left: 2px;
+}
+
+/* ── Suggestions ── */
+.suggestions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 20px;
+}
+.suggestion {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.suggestion:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--accent-dim);
+}
+
+/* ── Input Area ── */
+.input-section {
+  flex-shrink: 0;
+  padding: 8px 20px 12px;
+}
+.input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.input-wrap input {
+  flex: 1;
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 13.5px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+.input-wrap input::placeholder {
+  color: var(--text-tertiary);
+}
+.input-wrap input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.input-wrap button {
+  padding: 9px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition);
+  min-width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.input-wrap button:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+.input-wrap button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Thinking dot animation
+   ═══════════════════════════════════════════════════════════ */
+.thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+.thinking-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: dotBounce 1.4s infinite ease-in-out;
+}
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ═══════════════════════════════════════════════════════════
+   Scrollbar
+   ═══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ═══════════════════════════════════════════════════════════
+   Animations
+   ═══════════════════════════════════════════════════════════ */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(88,166,255,0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(88,166,255,0); }
+}
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Responsive: collapse sidebar on narrow screens
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "main";
+  }
+  .sidebar { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ═══════════ HEADER ═══════════ -->
+  <div class="header">
+    <div class="header-left">
+      <span class="header-logo">🧠 PocketMemory</span>
+    </div>
+    <div class="header-right">
+      <span v-if="wechatStatus.running" class="badge badge-online" :title="wechatStatus.hint">💬 微信在线</span>
+      <span v-else class="badge badge-offline">💬 微信离线</span>
+    </div>
+  </div>
+
+  <!-- ═══════════ LEFT SIDEBAR — Data Sources ═══════════ -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">📂 数据源</span>
+      <span class="sidebar-count">{{ sources.length }} 文件 · {{ totalChunks }} 片段</span>
+    </div>
+    <div class="sidebar-actions">
+      <button class="sidebar-btn" @click="scanSources" :disabled="scanning">
+        {{ scanning ? '⏳ 扫描中' : '🔍 扫描' }}
+      </button>
+      <button
+        v-if="wechatStatus.can_import"
+        class="sidebar-btn primary"
+        @click="importWechat"
+        :disabled="importing"
+      >{{ importing ? '⏳ 导入中' : '📥 微信导入' }}</button>
+    </div>
+    <div class="sidebar-status">
+      <span v-if="importResult" :class="importResult.includes('失败') ? 'err' : 'ok'">{{ importResult }}</span>
+      <span v-else-if="scanResult" :class="scanResult.error ? 'err' : 'ok'">{{ scanResult.error || scanResult.msg }}</span>
+    </div>
+    <div class="sidebar-list">
+      <template v-if="sources.length">
+        <!-- 本地文件 -->
+        <div class="sidebar-section">
+          <div class="sidebar-list-header">📄 本地文件 ({{ localSources.length }})</div>
+          <template v-if="localSources.length">
+            <div v-for="s in localSources" :key="s.name" class="source-item">
+              <span class="source-icon">{{ s.type === 'markdown' ? '📝' : '📄' }}</span>
+              <span class="source-name" :title="s.name">{{ s.name }}</span>
+              <span class="source-chunks">{{ s.chunk_count }}</span>
+            </div>
+          </template>
+          <div v-else class="sidebar-empty-inline">暂无本地文件</div>
+        </div>
+        <!-- 从微信导入 -->
+        <div class="sidebar-section">
+          <div class="sidebar-list-header">💬 从微信导入 ({{ wechatSources.length }})</div>
+          <template v-if="wechatSources.length">
+            <div v-for="s in wechatSources" :key="s.name" class="source-item">
+              <span class="source-icon">💬</span>
+              <span class="source-name" :title="s.name">{{ s.name }}</span>
+              <span class="source-chunks">{{ s.chunk_count }}</span>
+            </div>
+          </template>
+          <div v-else class="sidebar-empty-inline">暂无微信导入数据</div>
+        </div>
+      </template>
+      <div v-if="!sources.length" class="sidebar-empty">
+        暂无数据源<br>
+        将微信导出的 <code>.txt</code> 放入<br>
+        <code>{{ watchDir }}</code><br>
+        后点击扫描
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ MAIN CONTENT ═══════════ -->
+  <div class="main">
+    <!-- Chat Window (above everything) -->
+    <div class="chat" ref="msgContainer">
+      <div v-for="(msg, idx) in messages" :key="idx" :class="['msg', msg.role]">
+        <div class="sender">{{ msg.role === 'user' ? '你' : 'PocketMemory' }}</div>
+        <div class="content">{{ msg.content }}</div>
+      </div>
+      <div v-if="thinkingMsg" class="msg thinking">
+        <div class="thinking-dots">
+          <span></span><span></span><span></span>
+        </div>
+        {{ thinkingMsg.text }}
+      </div>
+    </div>
+
+    <!-- Pipeline Nodes -->
+    <div class="progress-section">
+      <div class="pipeline">
+        <div v-for="node in pipelineNodes" :key="node.id" :class="['pipe-node', node.status]">
+          <span class="node-icon">{{ node.icon }}</span>
+          <span class="node-label">{{ node.label }}</span>
+          <span v-if="node.latency != null" class="pipe-latency">{{ node.latency }}ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Suggestions -->
+    <div class="suggestions">
+      <span v-for="q in suggestions" :key="q" class="suggestion" @click="quickQuery(q)">{{ q }}</span>
+    </div>
+
+    <!-- Search Input -->
+    <div class="input-section">
+      <div class="input-wrap">
+        <input
+          v-model="query"
+          @keyup.enter="sendQuery"
+          placeholder="搜索你的记忆，例如：张三推荐了哪家火锅店？"
+          :disabled="loading"
+        />
+        <button @click="sendQuery" :disabled="loading || !query.trim()">
+          {{ loading ? '⏸' : '▶' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+// ── Cycling prompts during generation ──
+const CYCLE_PROMPTS = [
+  '🎯 正在分析查询意图...',
+  '🔍 检索相关记忆片段...',
+  '⚖️ 评估记忆相关性...',
+  '✨ 生成回答中...',
+  '📊 整理上下文信息...',
+  '🧠 推理最佳匹配...',
+  '💭 综合多源信息...',
+  '🔗 关联记忆线索...',
+];
+
+createApp({
+  data() {
+    return {
+      query: '', loading: false,
+      backendStatus: '未连接', statusText: '检查中...', statusDot: 'err',
+      messages: [],
+      pipelineNodes: [
+        { id: 'router', icon: '🎯', label: '路由', status: '', latency: null },
+        { id: 'retrieve', icon: '🔍', label: '检索', status: '', latency: null },
+        { id: 'judge', icon: '⚖️', label: '判断', status: '', latency: null },
+        { id: 'generate', icon: '✨', label: '生成', status: '', latency: null },
+      ],
+      latency: { embed: null, retrieval: null, judge: null, generate: null, total: null },
+      showLatency: false,
+      suggestions: [
+        '张三推荐了哪家火锅店？',
+        '团建大家都提了哪些地方？',
+        '我的笔记里关于Transformer写了什么？',
+        '李四面试了哪家公司？',
+        '端侧推理优化有哪些方法？',
+      ],
+      sources: [], totalChunks: 0, watchDir: '',
+      scanning: false, scanResult: null,
+      wechatStatus: { running: false, wxid: null, hint: '', can_import: false },
+      importing: false, importResult: '',
+      thinkingMsg: null,
+
+      // ── Progress cycling ──
+      cycleInterval: null,
+      cycleIndex: 0,
+      pipelineProgress: 0,
+      completedSteps: 0,
+    };
+  },
+  computed: {
+    localSources() {
+      return this.sources.filter(s => s.type !== 'wechat');
+    },
+    wechatSources() {
+      return this.sources.filter(s => s.type === 'wechat');
+    },
+  },
+  mounted() {
+    this.checkHealth();
+    this.loadWatchDir();
+    this.checkWechatStatus();
+    this.loadSources();
+  },
+  beforeUnmount() {
+    this._stopCycle();
+  },
+  methods: {
+    // ── Cycling prompt control ──
+    _startCycle() {
+      this._stopCycle();
+      this.cycleIndex = 0;
+      this.thinkingMsg = { text: CYCLE_PROMPTS[0], step: 'thinking' };
+      this.cycleInterval = setInterval(() => {
+        this.cycleIndex = (this.cycleIndex + 1) % CYCLE_PROMPTS.length;
+        this.thinkingMsg = { text: CYCLE_PROMPTS[this.cycleIndex], step: 'thinking' };
+      }, 2000);
+    },
+    _stopCycle() {
+      if (this.cycleInterval) {
+        clearInterval(this.cycleInterval);
+        this.cycleInterval = null;
+      }
+      this.thinkingMsg = null;
+    },
+
+    async checkHealth() {
+      try {
+        const r = await fetch('/health');
+        const d = await r.json();
+        this.backendStatus = '已连接';
+        this.statusText = '就绪';
+        this.statusDot = 'ok';
+      } catch {
+        this.statusText = '未连接';
+        this.statusDot = 'err';
+      }
+    },
+    async loadWatchDir() {
+      try {
+        const r = await fetch('/data/watched');
+        const d = await r.json();
+        this.watchDir = d.watch_dir || 'data/raw';
+      } catch {
+        this.watchDir = 'data/raw';
+      }
+    },
+    async checkWechatStatus() {
+      try {
+        const r = await fetch('/wechat/status');
+        const d = await r.json();
+        this.wechatStatus = {
+          running: d.running || false,
+          wxid: d.wxid || null,
+          hint: d.hint || '',
+          can_import: d.can_import || false,
+          msg_dbs: d.msg_dbs || [],
+        };
+      } catch {
+        this.wechatStatus = { running: false, wxid: null, hint: '', can_import: false };
+      }
+    },
+    async loadSources() {
+      try {
+        const r = await fetch('/data/sources');
+        const d = await r.json();
+        this.sources = d.sources || [];
+        this.totalChunks = d.total_chunks || 0;
+        this.watchDir = d.watch_dir || this.watchDir;
+      } catch { /* silently fail */ }
+    },
+    async scanSources() {
+      this.scanning = true;
+      this.scanResult = null;
+      this.importResult = '';
+      try {
+        const r = await fetch('/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ directory: '' }),
+        });
+        const d = await r.json();
+        this.scanResult = d.new_files > 0
+          ? { msg: `新增 ${d.new_files} 个文件, ${d.new_chunks} 个片段` }
+          : { msg: '没有发现新文件' };
+        await this.loadSources();
+      } catch (e) {
+        this.scanResult = { error: '失败: ' + e.message };
+      } finally {
+        this.scanning = false;
+      }
+    },
+    async importWechat() {
+      this.importing = true;
+      this.importResult = '';
+      this.scanResult = null;
+      try {
+        const r = await fetch('/wechat/import', { method: 'POST' });
+        const d = await r.json();
+        this.importResult = d.status === 'ok'
+          ? (d.chunks ? `已导入 ${d.chunks} 条消息片段` : '导入完成')
+          : (d.error || '导入失败');
+        if (d.status === 'ok') this.loadSources();
+      } catch (e) {
+        this.importResult = '失败: ' + e.message;
+      } finally {
+        this.importing = false;
+      }
+    },
+
+    // ── Pipeline helpers ──
+    resetPipeline() {
+      this.pipelineNodes.forEach(n => { n.status = ''; n.latency = null; });
+      this.pipelineProgress = 0;
+      this.completedSteps = 0;
+    },
+    setNodeActive(id) {
+      const n = this.pipelineNodes.find(x => x.id === id);
+      if (n) n.status = 'active';
+    },
+    setNodeDone(id) {
+      const n = this.pipelineNodes.find(x => x.id === id);
+      if (n) n.status = 'done';
+    },
+    updateProgress() {
+      const done = this.pipelineNodes.filter(n => n.status === 'done').length;
+      const active = this.pipelineNodes.filter(n => n.status === 'active').length;
+      this.completedSteps = done;
+      // Each step is 25% of the progress bar; active step adds partial progress
+      this.pipelineProgress = Math.min(done * 25 + (active > 0 ? 12 : 0), 100);
+    },
+
+    // ── Query ──
+    quickQuery(q) { this.query = q; this.sendQuery(); },
+
+    async sendQuery() {
+      const q = this.query.trim();
+      if (!q || this.loading) return;
+
+      this.loading = true;
+      this.resetPipeline();
+      this.thinkingMsg = null;
+      this.statusDot = 'busy';
+      this.showLatency = false;
+      this.messages.push({ role: 'user', content: q });
+
+      this._startCycle();
+      const tStart = Date.now();
+      this.setNodeActive('router');
+      this.updateProgress();
+
+      try {
+        const response = await fetch('/ask/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q }),
+        });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '', genText = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const data = line.substring(5).trim();
+            if (!data || data === '[DONE]') continue;
+
+            try {
+              const evt = JSON.parse(data);
+
+              if (evt.event === 'generate_token') {
+                genText += (evt.data || '');
+                // Clear thinking indicator as soon as streaming output begins
+                this.thinkingMsg = null;
+                this._stopCycle();
+                let lm = this.messages[this.messages.length - 1];
+                if (!lm || lm.role !== 'assistant' || lm._done) {
+                  this.messages.push({ role: 'assistant', content: genText, _done: false });
+                } else {
+                  lm.content = genText;
+                }
+                this.setNodeActive('generate');
+                this.updateProgress();
+              }
+              if (evt.event === 'generate' && evt.data) {
+                let lm = this.messages[this.messages.length - 1];
+                if (lm && lm.role === 'assistant') lm._done = true;
+              }
+
+              this.handleSSEEvent(evt);
+              await new Promise(r => setTimeout(r, 5));
+            } catch {
+              if (data.startsWith('{')) continue;
+            }
+          }
+        }
+
+        this.setNodeDone('generate');
+        this.updateProgress();
+        this.pipelineProgress = 100;
+        this.thinkingMsg = null;
+        this._stopCycle();
+        this.latency.total = Math.round(Date.now() - tStart);
+        this.showLatency = true;
+        this.statusDot = 'ok';
+      } catch (e) {
+        this.messages.push({ role: 'assistant', content: '查询失败: ' + e.message });
+        this.statusDot = 'err';
+        this.resetPipeline();
+        this._stopCycle();
+      } finally {
+        this.loading = false;
+        this.query = '';
+        this.$nextTick(() => {
+          const c = this.$refs.msgContainer;
+          if (c) c.scrollTop = c.scrollHeight;
+        });
+      }
+    },
+
+    handleSSEEvent(evt) {
+      const eventType = evt.event || evt.type || '';
+      const d = evt.data || evt;
+      const latencyMs = (d && typeof d === 'object' && d.latency_ms !== undefined)
+        ? d.latency_ms
+        : evt.latency_ms;
+
+      if (latencyMs !== undefined) {
+        const m = { router: 0, retrieve: 1, judge: 2, generate: 3 };
+        const i = m[eventType];
+        if (i !== undefined) this.pipelineNodes[i].latency = Math.round(latencyMs);
+      }
+
+      // Thinking message is handled by _startCycle() cycling
+
+      switch (eventType) {
+        case 'router':
+          this.setNodeDone('router');
+          // All intents except 'refuse' now go to retrieve (RAG project: always search memory)
+          if (d !== 'refuse') {
+            this.setNodeActive('retrieve');
+          }
+          break;
+        case 'retrieve':
+          this.setNodeDone('retrieve');
+          this.setNodeActive('judge');
+          break;
+        case 'judge':
+          this.setNodeDone('judge');
+          this.setNodeActive('generate');
+          break;
+        case 'generate':
+          // thinkingMsg already cleared by generate_token handler + _stopCycle()
+          break;
+      }
+      this.updateProgress();
+    },
+  },
+}).mount('#app');
+</script>
+</body>
+</html>
