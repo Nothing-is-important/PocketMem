@@ -1878,7 +1878,9 @@ PocketMemory —— 端侧个人记忆助手 Agent
   实现 LocalSimulateBackend（PC开发，transformers）和 MobileBackend（手机部署，ONNX/CoreML骨架），
   上层Agent代码零改动切换推理后端
 - 完整工程链路：WeChat导出解析 → 对话感知分块（30min窗口+重要性评分）→
-  双层语义缓存（L1 MD5+L2 余弦相似度）→ FastAPI/SSE流式服务 → Vue3两栏前端（左侧数据源面板 + 右侧对话窗口 + Pipeline可视化）
+  语义缓存（查询归一化 + L2 余弦相似度）→ FastAPI/SSE 真流式（token 级逐字推送）→
+  Vue3两栏前端 + 多轮对话支持（近 3 轮历史注入 prompt）
+- Router 关键词优先路由（命中跳过 LLM 省 2-3s）+ Reflect 降级策略（检索不足时阈值减半）
 - Benchmark验证：10/10查询成功率，30.9ms Embedding延迟，支持消融实验（有/无时间衰减、有/无实体加权）
 - 技术栈：Python, LangGraph, ChromaDB, PyTorch, FastAPI, Vue3, Kotlin
 ```

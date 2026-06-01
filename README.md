@@ -68,13 +68,14 @@ uv run python scripts/run_demo.py --serve
 
 ## 功能特性
 
-- **🔍 混合检索** — ChromaDB 向量检索 + BM25 关键词检索 + RRF 融合，召回率比单用任一种高 10-15%
+- **🔍 混合检索** — ChromaDB 向量检索 + BM25 关键词检索，ThreadPoolExecutor 并行执行 + RRF 融合
 - **⏰ 时间感知** — 指数时间衰减（30 天半衰期），符合艾宾浩斯遗忘曲线
 - **👤 实体加权** — 百家姓 + 正则轻量级实体提取，零额外显存
-- **🧠 Agent 编排** — LangGraph 状态图：Router → Retrieve → Judge → Generate，2 次 LLM 调用 / 查询
-- **💾 双层缓存** — L1 MD5 精确匹配 + L2 余弦相似度语义缓存
-- **📡 SSE 流式** — 实时推送管道状态 + 流式打字输出
-- **📂 数据源管理** — 支持微信 TXT / Markdown / PDF，增量索引，左侧常驻面板
+- **🧠 Agent 编排** — LangGraph 状态图：Router → Retrieve → Judge → Generate，Router 关键词优先（命中跳过 LLM）
+- **💾 语义缓存** — L2 余弦相似度缓存 + 查询归一化，提升重复查询命中率
+- **📡 SSE 真流式** — Token 级逐字推送（backend.generate_stream），非 5 字符伪造
+- **💬 多轮对话** — conversation_history 注入近 3 轮对话，支持指代消解
+- **📂 数据源管理** — 支持微信 TXT / Markdown / PDF，SHA256 内容哈希去重，左侧常驻面板
 - **📱 Android APK** — Kotlin + Jetpack Compose，连接 PC 后端
 - **🔌 推理抽象层** — 策略模式，PC（transformers）和手机（ONNX）一键切换
 
@@ -89,7 +90,7 @@ PocketAgenticRAG/
 ├── api/
 │   ├── server.py           # FastAPI 服务（SSE 流式）
 │   ├── models.py           # Pydantic 数据模型
-│   └── cache.py            # L1/L2 双层缓存
+│   └── cache.py            # 语义缓存（查询归一化 + L2 余弦相似度）
 ├── agent/
 │   ├── graph.py            # LangGraph 图定义
 │   ├── state.py            # Agent 状态
@@ -131,8 +132,8 @@ PocketAgenticRAG/
 | `GET` | `/` | 前端页面 |
 | `GET` | `/health` | 健康检查 |
 | `GET` | `/data/sources` | 数据源列表 |
-| `POST` | `/ask` | 同步问答 |
-| `POST` | `/ask/stream` | SSE 流式问答 |
+| `POST` | `/ask` | 同步问答（支持 conversation_history 参数） |
+| `POST` | `/ask/stream` | SSE token 级流式问答（支持多轮对话） |
 | `POST` | `/ingest` | 扫描索引新文件 |
 | `GET` | `/wechat/status` | 微信运行状态 |
 | `POST` | `/wechat/import` | 导入微信数据 |
