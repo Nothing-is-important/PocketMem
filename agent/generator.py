@@ -92,23 +92,40 @@ def _extract_facts_no_cache(state: AgentState) -> str:
 def create_generator_node(backend, enable_fact_extraction: bool = True):
     """创建答案生成节点。
 
-    Args:
-        backend: InferenceBackend 实例
-        enable_fact_extraction: 是否启用两阶段生成（默认开启）
+    Qwen3+ 思考模式：使用 generate_with_thinking() 生成，
+    自动分离思考过程和最终回答。
     """
 
     def generator_node(state: AgentState) -> AgentState:
         t0 = time.time()
+        query = state["query"]
 
-        prompt = build_generator_prompt(state)
-        answer = backend.generate(prompt, max_tokens=GENERATOR_MAX_TOKENS)
+        # 构建对话消息（支持 Qwen3 chat template）
+        messages = build_thinking_messages(state)
 
-        state["final_answer"] = answer
+        # 优先使用思考模式生成
+        if hasattr(backend, 'generate_with_thinking'):
+            thinking_text = ""
+            answer_text = ""
+            for event_type, text in backend.generate_with_thinking(
+                messages, max_tokens=GENERATOR_MAX_TOKENS
+            ):
+                if event_type == "think":
+                    thinking_text += text
+                elif event_type == "answer":
+                    answer_text += text
+            state["final_answer"] = answer_text.strip() or thinking_text.strip()
+            state["_thinking"] = thinking_text.strip()
+        else:
+            # 降级：标准生成
+            prompt = build_generator_prompt(state)
+            state["final_answer"] = backend.generate(prompt, max_tokens=GENERATOR_MAX_TOKENS)
+
         state["latency_stats"]["generate_ms"] = (time.time() - t0) * 1000
 
         state["messages"].append({
             "role": "generator",
-            "content": answer,
+            "content": state["final_answer"],
         })
 
         return state

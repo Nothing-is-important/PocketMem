@@ -315,6 +315,78 @@ body {
   max-width: 100%;
 }
 
+/* ── Thinking Panel (Qwen3思考过程) ── */
+.think-block {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-size: 12px;
+}
+.think-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-overlay);
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  transition: color var(--transition);
+}
+.think-header:hover { color: var(--text-secondary); }
+.think-header .think-caret {
+  font-size: 9px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.think-header .think-caret.open { transform: rotate(90deg); }
+.think-header .think-label {
+  font-weight: 500;
+}
+.think-header .think-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.think-content {
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  font-size: 12px;
+  border-top: 1px solid var(--border-subtle);
+  max-height: 260px;
+  overflow-y: auto;
+  background: rgba(88,166,255,0.03);
+  font-style: italic;
+}
+
+/* ── Source Citations ── */
+.sources-block {
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.sources-header {
+  font-weight: 500;
+  margin-bottom: 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.source-cite {
+  display: inline-flex;
+  gap: 4px;
+  padding: 1px 7px;
+  background: var(--bg-overlay);
+  border-radius: 10px;
+  margin: 2px 3px 2px 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
 /* ── Progress / Pipeline Section ── */
 .progress-section {
   flex-shrink: 0;
@@ -576,6 +648,23 @@ body {
     <div class="chat" ref="msgContainer">
       <div v-for="(msg, idx) in messages" :key="idx" :class="['msg', msg.role]">
         <div class="sender">{{ msg.role === 'user' ? '你' : 'PocketMemory' }}</div>
+        <!-- 思考过程（可折叠） -->
+        <div v-if="msg.thinking || msg._thinkingStream" class="think-block">
+          <div class="think-header" @click="toggleThink(msg)">
+            <span class="think-caret" :class="{ open: msg._thinkOpen }">▶</span>
+            <span class="think-label">💭 思考过程</span>
+            <span v-if="msg.thinkMs != null" class="think-time">{{ msg.thinkMs }}ms</span>
+          </div>
+          <div v-if="msg._thinkOpen" class="think-content">{{ msg.thinking || msg._thinkingStream || '' }}</div>
+        </div>
+        <!-- 来源引用 -->
+        <div v-if="msg.sources && msg.sources.length" class="sources-block">
+          <div class="sources-header">📎 来源 ({{ msg.sources.length }})</div>
+          <span v-for="(s, si) in msg.sources" :key="si" class="source-cite">
+            <template v-if="s.date">{{ s.date }}</template>
+            <template v-if="s.participants"> · {{ s.participants }}</template>
+          </span>
+        </div>
         <div class="content">{{ msg.content }}</div>
       </div>
       <div v-if="thinkingMsg" class="msg thinking">
@@ -841,6 +930,9 @@ createApp({
 
     // ── Query ──
     quickQuery(q) { this.query = q; this.sendQuery(); },
+    toggleThink(msg) {
+      msg._thinkOpen = !msg._thinkOpen;
+    },
 
     async sendQuery() {
       const q = this.query.trim();
@@ -901,12 +993,28 @@ createApp({
                 this._stopCycle();
                 let lm = this.messages[this.messages.length - 1];
                 if (!lm || lm.role !== 'assistant' || lm._done) {
-                  this.messages.push({ role: 'assistant', content: genText, _done: false });
+                  this.messages.push({ role: 'assistant', content: genText, _done: false, _thinkOpen: true });
                 } else {
                   lm.content = genText;
                 }
                 this.setNodeActive('generate');
                 this.updateProgress();
+              }
+              if (evt.event === 'think' && evt.data) {
+                // 思考过程：存入当前或下一条 assistant 消息
+                let lm = this.messages[this.messages.length - 1];
+                if (!lm || lm.role !== 'assistant' || lm._done) {
+                  this.messages.push({ role: 'assistant', content: '', thinking: evt.data, _done: false, _thinkOpen: true, thinkMs: evt.latency_ms });
+                } else {
+                  lm.thinking = (lm.thinking || '') + evt.data;
+                  lm.thinkMs = evt.latency_ms;
+                }
+              }
+              if (evt.event === 'sources' && evt.data) {
+                let lm = this.messages[this.messages.length - 1];
+                if (lm && lm.role === 'assistant') {
+                  lm.sources = evt.data;
+                }
               }
               if (evt.event === 'generate' && evt.data) {
                 let lm = this.messages[this.messages.length - 1];
@@ -964,7 +1072,6 @@ createApp({
       switch (eventType) {
         case 'router':
           this.setNodeDone('router');
-          // All intents except 'refuse' now go to retrieve (RAG project: always search memory)
           if (d !== 'refuse') {
             this.setNodeActive('retrieve');
           }
@@ -977,8 +1084,10 @@ createApp({
           this.setNodeDone('judge');
           this.setNodeActive('generate');
           break;
+        case 'think':
+          // 思考过程已通过 think_token 事件处理
+          break;
         case 'generate':
-          // thinkingMsg already cleared by generate_token handler + _stopCycle()
           break;
       }
       this.updateProgress();

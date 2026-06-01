@@ -183,7 +183,6 @@ class LocalSimulateBackend(InferenceBackend):
         try:
             from transformers import TextIteratorStreamer
         except ImportError:
-            # 降级：不支持流式时，一次性返回全部
             full = self.generate(prompt, max_tokens)
             yield full
             return
@@ -227,6 +226,70 @@ class LocalSimulateBackend(InferenceBackend):
             seq_len, len(total_text), self._last_generate_latency_ms
         )
 
+    def generate_with_thinking(self, messages: list, max_tokens: int = 512):
+        """Qwen3 思考模式生成 —— 返回 (thinking_text, answer_text)。
+
+        使用 apply_chat_template + enable_thinking=True 构建 prompt，
+        通过 token 151668 (</think>) 分离思考过程和最终回答。
+
+        Args:
+            messages: [{"role": "system/user/assistant", "content": "..."}, ...]
+            max_tokens: 最大生成 token 数
+
+        Returns:
+            (thinking_text: str, answer_text: str)
+        """
+        t0 = time.time()
+
+        # 用 chat template 构建 thinking prompt
+        text = self._llm_tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=True,
+        )
+        inputs = self._llm_tokenizer(text, return_tensors="pt").to(self.device)
+        seq_len = inputs["input_ids"].shape[1]
+
+        # 思考模式推荐参数：temperature=0.6, top_p=0.95, top_k=20
+        with torch.no_grad():
+            outputs = self._llm_model.generate(
+                **inputs,
+                max_new_tokens=max_tokens,
+                do_sample=True,
+                temperature=0.6,
+                top_p=0.95,
+                top_k=20,
+                eos_token_id=self._llm_tokenizer.eos_token_id,
+                pad_token_id=self._llm_tokenizer.eos_token_id,
+            )
+
+        # 提取新生成的 token IDs
+        output_ids = outputs[0][seq_len:].tolist()
+
+        # 在 token 151668 (</think>) 处分隔思考和回答
+        try:
+            think_end = len(output_ids) - output_ids[::-1].index(151668)
+        except ValueError:
+            think_end = 0
+
+        thinking_text = self._llm_tokenizer.decode(
+            output_ids[:think_end], skip_special_tokens=True
+        ).strip()
+        answer_text = self._llm_tokenizer.decode(
+            output_ids[think_end:], skip_special_tokens=True
+        ).strip()
+
+        self._last_generate_latency_ms = (time.time() - t0) * 1000
+        logger.info(
+            "GenerateThinking: think_chars=%s, answer_chars=%s, latency=%.1fms",
+            len(thinking_text), len(answer_text), self._last_generate_latency_ms
+        )
+
+        return thinking_text, answer_text
+
+    # ═══════════════════════════════════════════════════════════════
+    # 多模态生成（图片 + 文本 → 文本）
     # ═══════════════════════════════════════════════════════════════
     # 多模态生成（图片 + 文本 → 文本）
     # ═══════════════════════════════════════════════════════════════

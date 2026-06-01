@@ -57,12 +57,15 @@ class Settings:
     llm_model: str = os.getenv(
         "POCKET_LLM_MODEL",
         _find_model(
-            _model_search_paths("Qwen2.5-1.5B-Instruct"),
-            "Qwen/Qwen2.5-1.5B-Instruct",
+            _model_search_paths("Qwen3-4B"),
+            "Qwen/Qwen3-4B",
         ),
     )
     chunk_size: int = int(os.getenv("POCKET_CHUNK_SIZE", "512"))
     max_tokens: int = int(os.getenv("POCKET_MAX_TOKENS", "512"))
+
+    # ── 思考模式（Qwen3）──
+    enable_thinking: bool = os.getenv("POCKET_THINKING", "true").lower() == "true"
 
     # ── 向量数据库 ──
     chroma_persist_dir: str = os.getenv(
