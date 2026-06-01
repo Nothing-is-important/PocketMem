@@ -70,7 +70,7 @@ uv run python scripts/run_demo.py --once
 ```
 设备: cuda
 Embedding 模型: F:/Models/bge-small-zh-v1.5
-LLM 模型: F:/Models/Qwen2.5-1.5B-Instruct
+LLM 模型: Qwen3-4B（思考模式）
 索引完成: 195 个新文档块 (总计 195)
 
 Q: 张三推荐的那家火锅店叫什么？在哪里？
@@ -78,12 +78,12 @@ A: 张三提到过渝味火锅，地址在朝阳区建国路88号。
    检索片段数: 10
 ```
 
-**第一次运行耗时：** 模型加载 ~3 秒（已缓存）+ 索引 ~5 秒 + 5 条查询 ~90 秒 → 总计约 2 分钟。
+**第一次运行耗时：** 模型加载 ~10s（4B 模型更大）+ 索引 ~5 秒 + 5 条查询 ~30-60 秒（思考模式有额外推理时间）→ 总计约 1-2 分钟。
 
 **如果报错：**
-- `WinError 10060`（HuggingFace 连接超时）→ 检查是否设置了 `HF_HUB_OFFLINE='1'`
-- `ValueError: vocab and merges` → 检查 `F:/Models/` 下是否有 Qwen2.5-1.5B-Instruct 和 bge-small-zh-v1.5 两个模型目录
-- 其他报错 → 查 [开发问题与优化方案.md](docs/开发问题与优化方案.md)，13 个常见问题都有记录
+- `WinError 10060`（HuggingFace 连接超时）→ 项目已集成 ModelScope 自动下载（国内网络友好），或手动设置 `$env:HF_HUB_OFFLINE='1'`
+- `CUDA out of memory` → Qwen3-4B 需要约 8GB 显存（fp16），如果显存不足设置 `$env:POCKET_DEVICE='cpu'`（速度较慢但可运行）
+- 其他报错 → 查 [开发问题与优化方案.md](docs/开发问题与优化方案.md)
 
 **前端模式：**
 ```bash
@@ -122,7 +122,7 @@ PocketMemory 走的是另一条路：
 
 4. **不是调 API，是真本地推理。** 整个系统跑在你的 RTX 4060 上，模型下载后完全离线。面试官能看到你有真正的模型部署能力，不是只会调接口。
 
-5. **针对小模型做的工程优化。** 1.5B 模型上下文能力弱？用两阶段生成（先提取事实再回答）+ 组合评分替代 LLM 验证（12 次调用→2 次）+ Hook 系统零侵入扩展。每一个优化都是在 8GB 显存约束下做的务实工程决策。
+5. **针对小模型的工程优化 → Qwen3-4B 思考模式升级。** 开发阶段用 1.5B 模型快速迭代，生产用 Qwen3-4B 思考模式——自动分离思考过程和最终回答，前端展示 💭 思考面板。两阶段生成（提取事实→回答）被简化为单阶段思考模式，利用 4B 模型的推理能力直接处理上下文。Hook 系统零侵入扩展。每一个优化都是在 8GB 显存约束下做的务实工程决策。
 
 6. **考虑真实数据接入。** 不满足于 demo 数据——有数据源管理器（自动发现+格式检测+增量索引）、微信进程检测、数据库解密预留接口。从"玩具"到"工具"的完整考虑。
 
@@ -296,6 +296,7 @@ PocketMemory 不一样：
 │           FastAPI Server (Python)                │
 │  POST /ask  │  /ask/stream  │  /memory/stats     │
 │  POST /ingest  │  GET /data/sources  │  /health   │
+│  GET /data/suggestions  │  POST /data/suggestions/refresh  │  🆕
 │  ┌─────────────────────────────────────────┐    │
 │  │        L1/L2 TwoTierCache               │    │
 │  └─────────────────────────────────────────┘    │
@@ -400,15 +401,23 @@ PocketMemory 不一样：
 │        state["context_sufficient"] = True        │
 └──────────────────┬─────────────────────────────┘
                    ▼ (条件边: sufficient=True → generate)
-┌─ 步骤 6: Generator (答案生成) ──────────────────┐
-│  构建 prompt:                                    │
-│    System: "你是个人记忆助手..."                 │
-│    UserContext: "用户常查询「张三」(23次)..."     │
-│    Query: "张三推荐了哪家火锅店？"               │
-│    Memories: [记忆片段1] 时间: 2026-03-15...     │
-│              [记忆片段2] 时间: 2026-03-16...     │
-│  调用 backend.generate(prompt, max_tokens=512)   │
-│  输出: "张三推荐了渝味火锅，在朝阳区建国路88号"   │
+┌─ 步骤 6: Generator（答案生成 - Qwen3 思考模式）────────┐
+│  构建 chat messages（ChatML 格式 + /think 指令）:        │
+│    System: "你是个人记忆助手.../think"                   │
+│    User: "用户查询：...\n记忆片段：..."                   │
+│  调用 backend.generate_with_thinking(messages)           │
+│  ┌─ 思考过程 ─────────────────────────────────────┐     │
+│  │ 1. 分析用户查询意图：查找火锅店推荐               │     │
+│  │ 2. 检查记忆片段 → 张三提到渝味火锅               │     │
+│  │ 3. 确认地址信息 → 朝阳区建国路88号               │     │
+│  │ 4. 组织回答结构...                              │     │
+│  └────────────────────────────────────────────────┘     │
+│  ┌─ 最终回答 ─────────────────────────────────────┐     │
+│  │ 张三推荐了渝味火锅，在朝阳区建国路88号。          │     │
+│  │ （来源：2026-03-15，参与人：张三）               │     │
+│  └────────────────────────────────────────────────┘     │
+│  思考过程通过 token 151668 (</think>) 与回答分离         │
+│  前端展示 💭 可折叠思考面板 + 📎 来源引用                │
 └──────────────────┬─────────────────────────────┘
                    ▼
 ┌─ 步骤 7: post_generate hook ──────────────────┐
@@ -424,18 +433,18 @@ PocketMemory 不一样：
         "sources": [...] }
 ```
 
-**关键延迟构成（基于 1.5B 模型实际测试）：**
+**关键延迟构成（基于 Qwen3-4B 思考模式，GPU 实测）：**
 
 ```
-Router:     ~1-2s     (1 次 LLM 调用)
+Router:     ~0-2s     (关键词命中 0ms / LLM 分类 ~2s)
 Retriever:  ~15ms     (向量检索 + BM25 + RRF + 实体加权)
 Judge:      ~0ms      (组合评分, 纯数学, 无 LLM 调用)
-Generator:  ~8-20s    (1 次 LLM 调用, 答案长度决定)
+Generator:  ~5-15s    (思考推理 ~3-8s + 回答生成 ~2-7s)
 ─────────────────────────
-总计:       ~10-22s   (瓶颈在 Generator)
+总计:       ~5-17s    (思考模式下有额外推理时间，但回答质量显著提升)
 ```
 
-**LLM 调用次数：2 次（Router 1 次 + Generator 1 次）。** 对比原始 Evidence Judge 方案的 ~12 次，减少了 83%。
+**LLM 调用次数：1-2 次（Router 关键词命中 0 次 + Generator 1 次）。** 对比原始 Evidence Judge 方案的 ~12 次，减少了 83%+。
 
 ### 关键设计决策
 
@@ -482,15 +491,16 @@ Cross-Encoder（如 bge-reranker）可以显著提高检索精度，但需要额
 | **Agent 编排** | LangGraph | CrewAI, AutoGen, Dify | 有状态图、条件分支、可控性强 |
 | **向量数据库** | ChromaDB | Milvus, FAISS, Pinecone | 轻量纯本地、pip install 即用 |
 | **Embedding 模型** | BGE-small-zh-v1.5 | text-embedding-3-small, m3e-base | 中文效果好、仅 100MB、CPU 可跑 |
-| **LLM** | Qwen2.5-1.5B (开发) / Qwen3-4B W4A8 (生产) | GPT-4o, DeepSeek, Llama | 本地推理、可量化部署、实习经验复用 |
+| **LLM** | Qwen3-4B (思考模式) | GPT-4o, DeepSeek, Llama | 本地推理、原生思考推理、Qwen2.5-1.5B 开发→4B 生产升级路径 |
 | **Web 框架** | FastAPI | Flask, Django | 原生异步、自动生成 API 文档、SSE 支持 |
 | **流式传输** | SSE | WebSocket, Polling | 单向推送、HTTP 协议复用、浏览器原生支持 |
 | **关键词检索** | BM25 (rank_bm25) | Elasticsearch, Whoosh | 纯 Python、零外部服务依赖 |
 | **中文分词** | jieba | HanLP, LAC, pkuseg | 轻量、速度快、够用 |
 | **包管理器** | uv | pip, poetry, conda | Rust 实现、快 10-100 倍、自动锁版本 |
-| **推理框架** | transformers (PyTorch) | vLLM, llama.cpp, Ollama | 灵活、支持量化加载、与实习经验一致 |
+| **推理框架** | transformers (PyTorch) | vLLM, llama.cpp, Ollama | 灵活、支持量化加载、原生 ChatML 模板 |
+| **模型下载** | ModelScope（国内）/ HuggingFace | — | 自动检测网络环境，优先 ModelScope（免科学上网） |
 | **量化方案** | bitsandbytes (开发) / LLMC W4A8 (生产) | GPTQ, AWQ, GGUF | 开发快速验证 + 生产精度最优 |
-| **前端** | Vue3 (CDN 单文件) | React, Svelte, 原生 HTML | 零构建、单文件部署、SSE 流式处理简洁 |
+| **前端** | Vue3 (CDN 单文件) | React, Svelte, 原生 HTML | 零构建、单文件部署、思考面板 + 来源引用 UI |
 
 > **核心原则：** 每个技术决策都由两个因素驱动——(1) 8GB 显存的硬件约束，(2) 全程离线不依赖云服务的部署目标。这两个约束倒推了所有技术选型。
 
@@ -735,8 +745,6 @@ class InferenceBackend(ABC):
 composite = 0.5 × 语义相似度 + 0.2 × 时间衰减 + 0.1 × 实体加权 + 0.2 × 重要性评分
 ```
 
-**简化理由（这个在面试时非常加分）：**
-
 | Evidence Judge 假设 | 个人记忆场景的真实情况 |
 |---------------------|----------------------|
 | 数据源不可信（网页搜索结果可能是虚假信息）| 数据源天然可信（用户自己的聊天记录和笔记）|
@@ -824,7 +832,7 @@ class MockBackend:
 | **模型文件大小** | 15GB（存全精度） | ~5GB（量化后） |
 | **可部署到手机** | ❌ 15GB 太大 | ✅ 5GB 可行 |
 
-**开发流程：** bitsandbytes 快速验证功能 → LLMC 量化 4B 模型 → 替换掉 1.5B → 面试展示量化结果。
+**开发流程：** bitsandbytes 快速验证功能 → LLMC 量化 4B 模型 → 替换掉开发用的小模型 → 面试展示量化结果。
 
 **面试讲法：** "我用了'开发-生产分离'的量化策略。开发阶段用 bitsandbytes 快速验证，生产部署时用实习中学到的 LLMC W4A8 量化——QuRot 旋转权重矩阵、LWC 学习权重裁剪、GPTQ 逐层贪心优化。这个策略和我在实习中做 Qwen3-4B 量化的方法论完全一致。"
 
@@ -1140,6 +1148,116 @@ hooks.register("post_generate", record_query)     # 查询后更新画像
 
 ---
 
+## 第 2.8 节：v1.2 新特性——思考模式 + 动态推荐 + 多轮对话 🟡 进阶 🆕
+
+> 🎯 **本节目标：** 掌握 v1.2 新增的四个核心特性，理解每个特性的设计动机和面试表达。
+> 🔴 **面试必问：** "你的 Agent 怎么展示推理过程？"
+
+### 2.8.1 Qwen3 思考模式——让 Agent 的推理过程可见
+
+#### 为什么需要思考模式？
+
+普通 LLM 是"黑盒"——用户只能看到最终回答，看不到模型内部的推理过程。Qwen3 的思考模式通过 ChatML 模板中的 `/think` 指令和 `<think>...</think>` 标记，将内部推理过程显式输出，实现了推理透明化。
+
+#### 技术实现
+
+```
+用户消息 → tokenizer.apply_chat_template(enable_thinking=True)
+         → 模型生成: <think>推理过程...</think>\n\n最终回答
+         → token 151668 (</think>) 分隔 → 思考文本 + 回答文本
+         → SSE 分别推送 think 事件和 generate_token 事件
+         → 前端展示 💭 可折叠思考面板 + 回答
+```
+
+**核心代码路径：**
+- `backend/local_simulate.py:generate_with_thinking()` — 使用 ChatML 模板 + token 151668 检测
+- `agent/generator.py:build_thinking_messages()` — 构建 `/think` 模式的 chat messages
+- `api/server.py` — SSE `think` 事件 + `generate_token` 事件分离推送
+- `frontend/index.html` — `.think-block` CSS + `toggleThink()` 折叠交互
+
+**思考模式参数：** temperature=0.6, top_p=0.95, top_k=20（官方推荐）
+
+**面试讲法：** "Qwen3 的思考模式通过 token 151668 精确分隔推理过程和最终回答。我在 SSE 流式传输中拆分为 think 和 generate_token 两种事件，前端用可折叠面板展示推理过程——这比'黑盒回答'更能让用户信任，也方便调试。如果你用 `/no_think` 替换 system prompt 中的 `/think`，模型就退回标准模式。这是 Qwen3 原生双模式能力的体现。"
+
+### 2.8.2 动态推荐问题——混合方案（模板秒开 + LLM 后台升级）
+
+#### 设计动机
+
+原来的推荐问题是 5 个硬编码字符串，与用户的实际数据无关。需要一种既能秒开、又能基于实际数据生成个性化推荐的方法。
+
+#### 混合方案架构
+
+```
+页面加载          首次查询后         6s+11s 轮询
+   │                 │                  │
+   ▼                 ▼                  ▼
+模板算法 (<5ms)   POST /refresh     GET /suggestions
+   │              (LLM 后台线程)    (LLM 缓存命中)
+   ▼                 │                  │
+即时显示          不阻塞 UI         升级为 LLM 推荐
+```
+
+**核心 API：**
+- `GET /data/suggestions` — 返回 LLM 缓存或降级模板算法
+- `POST /data/suggestions/refresh` — 触发后台 LLM 生成（fire-and-forget）
+- `frontend._triggerSuggestionRefresh()` — 首次查询后自动调用
+
+**模板算法：** 从 ChromaDB 采样文档 → `entity_extractor.extract_people()` + `extract_topics()` → `_clean_entity()` 噪声过滤 → 模板填充
+
+**面试讲法：** "推荐系统用了混合策略：页面加载时用模板算法（<5ms 秒开），用户首次查询后，后台异步调用 LLM 生成更优质的问题，缓存后在下次页面刷新时替换模板。这样既保证了首屏速度，又最终提供了个性化推荐。对于小模型（<3B），自动跳过 LLM 刷新，因为小模型输出不可控。"
+
+### 2.8.3 多轮对话——指代消解
+
+#### 解决了什么问题？
+
+"张三推荐了哪家火锅店？" → "人均多少？" → "地址在哪？"
+
+没有多轮对话历史，模型不知道"那家"指代渝味火锅，"地址"指代火锅店的地址。
+
+#### 实现方式
+
+```javascript
+// frontend/index.html - sendQuery()
+const history = this.messages
+  .filter(m => m.role === 'user' || m.role === 'assistant')
+  .slice(-6); // 最近 3 轮（6 条消息）
+// 序列化为 [{query, answer}, ...] 传入 POST /ask/stream
+
+// agent/generator.py - build_thinking_messages()
+// 注入对话历史到 user message
+user_parts.push("之前的对话：");
+user_parts.push("用户：...");
+user_parts.push("助手：...");
+```
+
+**面试讲法：** "多轮对话的核心是 conversation_history 的收集和注入。前端自动收集最近 3 轮对话，后端在构建 prompt 时注入历史上下文。关键是降级——历史过长时截断只保留最后 100 字，避免 token 超限。"
+
+### 2.8.4 ModelScope 集成——国内网络友好
+
+HuggingFace 在国内经常超时。项目在 `config/settings.py` 的 `_find_model()` 中加入了 ModelScope 自动下载链路：
+
+```
+本地路径 → ModelScope 下载（免科学上网）→ HuggingFace 在线
+```
+
+用户只需确保 `modelscope` 包已安装，模型下载自动走 ModelScope。
+
+**面试讲法：** "考虑到国内网络环境，我在模型自动发现链路中加入了 ModelScope 作为优先下载源。这体现了'根据部署环境做适配'的工程意识——不是硬依赖 HuggingFace，而是提供降级路径。"
+
+### 2.8.5 前端增强——思考面板 + 来源引用
+
+**思考面板：** 
+- CSS: `.think-block` 可折叠面板，深色主题，字体 italic
+- 交互：点击展开/折叠，默认展开（流式生成时）
+- 状态：`msg.thinking` 存储思考文本，`msg._thinkOpen` 控制展开
+
+**来源引用：**
+- SSE `sources` 事件携带 `[{date, participants}]` 数组
+- 渲染为 `.source-cite` 标签（圆角标签、mono 字体）
+- 显示在回答上方
+
+---
+
 ## 第 3 节：环境搭建——从零开始
 
 ### 前置条件
@@ -1163,24 +1281,28 @@ uv sync
 - `fastapi`, `uvicorn`, `sse-starlette` —— API 服务
 - `pdfplumber` —— PDF 解析
 
-### Step 2：预下载模型（离线前必须做！）
+### Step 2：预下载模型
+
+模型自动从 ModelScope 下载（国内网络友好），无需手动操作。如需离线运行：
 
 ```bash
-python scripts/download_models.py
+# 从 ModelScope 手动下载到本地
+modelscope download --model Qwen/Qwen3-4B --local_dir F:/Models/Qwen3-4B
+modelscope download --model BAAI/bge-small-zh-v1.5 --local_dir F:/Models/bge-small-zh-v1.5
 ```
-
-这会从 HuggingFace 下载两个模型到 `~/.cache/huggingface/hub/`：
 
 | 模型 | 大小 | 用途 |
 |------|------|------|
 | BAAI/bge-small-zh-v1.5 | ~100MB | Embedding（文本→向量） |
-| Qwen/Qwen2.5-1.5B-Instruct | ~3GB | LLM（答案生成） |
+| Qwen/Qwen3-4B | ~8GB | LLM（答案生成 + 思考推理） |
 
 **为什么选这两个？**
 - BGE-small 是中文 Embedding 的性价比之王：尺寸小、效果好、CPU 都能跑
-- Qwen2.5-1.5B 是开发阶段的最小可用模型：下载快、推理快、足够验证功能
+- Qwen3-4B 是当前的生成模型：原生支持思考模式、4B 参数量在 8GB 显存下可流畅运行
 
-**后续升级路径：** 开发完成后，你可以用实习中学到的 LLMC 量化技术，把 Qwen3-4B 量化为 W4A8（~2.3GB），替换掉 1.5B 模型。这就自然形成了面试故事："开发阶段用小模型快速迭代，生产环境用量化后的 4B 模型提升效果。"
+**模型下载优先级：** 本地路径 → ModelScope（国内）→ HuggingFace（需科学上网）
+
+**关闭思考模式：** 设置环境变量 `$env:POCKET_THINKING="false"` 或 system prompt 中去掉 `/think`。
 
 ### Step 3：验证环境
 
@@ -2160,16 +2282,16 @@ uv run python scripts/run_demo.py --serve
 
 **面试附加值：** "我用自己真实的微信聊天记录测试过，195 条模拟数据变成了 2000+ 条真实对话。"
 
-### 路线 2：量化模型替换（1 天，最高面试价值）
+### 路线 2：量化模型升级（可选，如果你做了 LLMC 量化）
 
-当前跑的是 Qwen2.5-1.5B（开发验证用）。替换成你实习中学到的 LLMC W4A8 量化模型：
+当前跑的是 Qwen3-4B（思考模式）。如果你在实习中做了 LLMC W4A8 量化，可以用量化版本进一步节省显存：
 
-1. 下载 Qwen3-4B-Instruct
+1. 下载 Qwen3-4B-Instruct（如果还没有）
 2. 用 LLMC 做 W4A8 量化（QuRot + LWC + GPTQ）
-3. 替换 `settings.py` 中的 LLM 模型路径
-4. 重新跑 Benchmark，对比 1.5B vs 4B-W4A8 的延迟和答案质量
+3. 替换 `settings.py` 中的 LLM 模型路径为量化版本
+4. 重新跑 Benchmark，对比 FP16 vs W4A8 的延迟和 PPL
 
-**面试附加值：** "我把实习中的 W4A8 量化技术应用到了这个项目，4B 量化模型在 8GB 显存下跑通，PPL 损失 <3%。"
+**面试附加值：** "我把实习中的 W4A8 量化技术应用到了这个项目的 4B 模型，量化后在 8GB 显存下跑通，PPL 损失 <3%。"
 
 ### 路线 3：三层记忆架构（3 天，架构深度）
 

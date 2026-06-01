@@ -105,15 +105,9 @@ def create_generator_node(backend, enable_fact_extraction: bool = True):
 
         # 优先使用思考模式生成
         if hasattr(backend, 'generate_with_thinking'):
-            thinking_text = ""
-            answer_text = ""
-            for event_type, text in backend.generate_with_thinking(
+            thinking_text, answer_text = backend.generate_with_thinking(
                 messages, max_tokens=GENERATOR_MAX_TOKENS
-            ):
-                if event_type == "think":
-                    thinking_text += text
-                elif event_type == "answer":
-                    answer_text += text
+            )
             state["final_answer"] = answer_text.strip() or thinking_text.strip()
             state["_thinking"] = thinking_text.strip()
         else:
