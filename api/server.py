@@ -167,8 +167,8 @@ async def ask_stream(req: AskRequest, request: Request):
             conversation_history=req.conversation_history or [],
         )
 
-        gen_queue: asyncio.Queue = asyncio.Queue()  # 流式生成结果队列
-        gen_task = None  # 后台生成任务
+        gen_state = None  # judge 后的状态，用于生成
+        gen_t0 = 0.0
 
         try:
             async for event in agent_graph.astream(state_data):
@@ -203,86 +203,57 @@ async def ask_stream(req: AskRequest, request: Request):
                         "latency_ms": latency_stats.get("judge_ms", 0),
                     }})}
 
-                    # 🔥 Judge 完成 → 立即后台启动流式生成
-                    backend = getattr(request.app.state, "backend", None)
-                    if backend and hasattr(backend, 'generate_with_thinking'):
-                        from agent.generator import build_thinking_messages
-                        gen_messages = build_thinking_messages(node_state)
+                    # 保存状态并退出 astream，后续由 SSE handler 直接生成
+                    gen_state = node_state
+                    break
 
-                        async def _run_streaming_gen():
-                            """在 executor 线程中运行生成，结果放入队列。"""
-                            loop = asyncio.get_running_loop()
+            # ── astream 循环结束，进入生成阶段 ──
+            if gen_state is not None:
+                gen_t0 = time.time()
+                backend = getattr(request.app.state, "backend", None)
 
-                            def _gen():
-                                for event_type, text in backend.generate_with_thinking(
-                                    gen_messages, max_tokens=512
-                                ):
-                                    loop.call_soon_threadsafe(
-                                        gen_queue.put_nowait, (event_type, text)
-                                    )
-                                loop.call_soon_threadsafe(gen_queue.put_nowait, None)
+                if backend and hasattr(backend, 'generate_with_thinking'):
+                    from agent.generator import build_thinking_messages
+                    messages = build_thinking_messages(gen_state)
 
-                            await asyncio.to_thread(_gen)
+                    first_think = True
+                    thinking_text = ""
+                    answer_text = ""
+                    for event_type, text in backend.generate_with_thinking(
+                        messages, max_tokens=512
+                    ):
+                        if event_type == "think":
+                            if first_think:
+                                yield {"data": json.dumps({"event": "think_start", "data": ""})}
+                                first_think = False
+                            thinking_text += text
+                            yield {"data": json.dumps({"event": "think_token", "data": text})}
+                        elif event_type == "answer":
+                            answer_text += text
+                            yield {"data": json.dumps({"event": "generate_token", "data": text})}
+                        await asyncio.sleep(0.005)
 
-                        gen_task = asyncio.create_task(_run_streaming_gen())
+                    # 更新 state 用于 hook
+                    gen_state["final_answer"] = answer_text.strip() or thinking_text.strip()
+                    gen_state["_thinking"] = thinking_text.strip()
+                else:
+                    # 降级：标准生成
+                    from agent.generator import build_generator_prompt
+                    prompt = build_generator_prompt(gen_state)
+                    gen_state["final_answer"] = backend.generate(prompt, max_tokens=512)
 
-                elif node_name == "generate":
-                    # 从 gen_queue 消费流式结果并推送 SSE
-                    if gen_task:
-                        first_think = True
-                        while gen_task is not None:
-                            try:
-                                item = await asyncio.wait_for(gen_queue.get(), timeout=0.1)
-                            except asyncio.TimeoutError:
-                                continue
-                            if item is None:
-                                break
-                            event_type, text = item
-                            if event_type == "think":
-                                if first_think:
-                                    yield {"data": json.dumps({
-                                        "event": "think_start", "data": "",
-                                    })}
-                                    first_think = False
-                                yield {"data": json.dumps({
-                                    "event": "think_token",
-                                    "data": text,
-                                })}
-                            elif event_type == "answer":
-                                yield {"data": json.dumps({
-                                    "event": "generate_token",
-                                    "data": text,
-                                })}
-                            await asyncio.sleep(0.005)
-                        # 确保 gen_task 完成
-                        try:
-                            await gen_task
-                        except Exception:
-                            pass
-                    else:
-                        # 降级：无后台生成，从 state 读取
-                        thinking = node_state.get("_thinking", "")
-                        final_answer = node_state.get("final_answer", "")
-                        if thinking:
-                            yield {"data": json.dumps({"event": "think_start", "data": ""})}
-                            await asyncio.sleep(0.1)
-                            yield {"data": json.dumps({"event": "think_token", "data": thinking})}
-                            await asyncio.sleep(0.1)
-                        if final_answer:
-                            for i in range(0, len(final_answer), 3):
-                                yield {"data": json.dumps({
-                                    "event": "generate_token",
-                                    "data": final_answer[i:i + 3],
-                                })}
-                                await asyncio.sleep(0.03)
+                gen_latency = (time.time() - gen_t0) * 1000
+                gen_state["latency_stats"]["generate_ms"] = gen_latency
+                yield {"data": json.dumps({"event": "generate", "data": "", "latency_ms": gen_latency})}
 
-                    gen_latency = latency_stats.get("generate_ms", 0)
-                    yield {"data": json.dumps({
-                        "event": "generate",
-                        "data": "",
-                        "latency_ms": gen_latency,
-                    })}
-                    _log_event("generate", f"生成完成", latency=gen_latency)
+                # 手动触发 post_generate hook（用户画像记录）
+                try:
+                    from agent.hooks import hooks
+                    hooks.run("post_generate", gen_state)
+                except Exception:
+                    pass
+
+                _log_event("generate", f"生成完成", latency=gen_latency)
         except Exception as e:
             yield {"data": json.dumps({"event": "error", "data": str(e)})}
 
