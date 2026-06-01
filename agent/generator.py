@@ -14,7 +14,7 @@ from .state import AgentState
 # Prompt 从配置加载（支持版本管理和热加载）
 from config.prompts import prompts
 
-GENERATOR_MAX_TOKENS = 512
+GENERATOR_MAX_TOKENS = 2048
 
 
 def build_thinking_messages(state: AgentState) -> list:
@@ -161,11 +161,17 @@ def create_generator_node(backend, enable_fact_extraction: bool = True):
         # 构建对话消息（支持 Qwen3 chat template）
         messages = build_thinking_messages(state)
 
-        # 优先使用思考模式生成
+        # 优先使用思考模式生成（流式 yield，节点内收集结果）
         if hasattr(backend, 'generate_with_thinking'):
-            thinking_text, answer_text = backend.generate_with_thinking(
+            thinking_text = ""
+            answer_text = ""
+            for event_type, text in backend.generate_with_thinking(
                 messages, max_tokens=GENERATOR_MAX_TOKENS
-            )
+            ):
+                if event_type == "think":
+                    thinking_text += text
+                elif event_type == "answer":
+                    answer_text += text
             # 思考模式返回空 → 降级到标准生成
             if not answer_text.strip() and not thinking_text.strip():
                 prompt = build_generator_prompt(state)

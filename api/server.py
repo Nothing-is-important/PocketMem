@@ -81,7 +81,8 @@ async def index():
 async def health(request: Request):
     backend = getattr(request.app.state, "backend", None)
     backend_type = backend.backend_type if backend else "not_initialized"
-    return {"status": "ok", "backend": backend_type}
+    device = getattr(backend, "device", "unknown") if backend else "unknown"
+    return {"status": "ok", "backend": backend_type, "device": device}
 
 
 @app.get("/memory/stats", response_model=MemoryStats)
@@ -220,7 +221,7 @@ async def ask_stream(req: AskRequest, request: Request):
                     thinking_text = ""
                     answer_text = ""
                     for event_type, text in backend.generate_with_thinking(
-                        messages, max_tokens=512
+                        messages, max_tokens=2048
                     ):
                         if event_type == "think":
                             if first_think:
@@ -240,7 +241,7 @@ async def ask_stream(req: AskRequest, request: Request):
                     # 降级：标准生成
                     from agent.generator import build_generator_prompt
                     prompt = build_generator_prompt(gen_state)
-                    gen_state["final_answer"] = backend.generate(prompt, max_tokens=512)
+                    gen_state["final_answer"] = backend.generate(prompt, max_tokens=2048)
 
                 gen_latency = (time.time() - gen_t0) * 1000
                 gen_state["latency_stats"]["generate_ms"] = gen_latency

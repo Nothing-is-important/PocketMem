@@ -48,6 +48,12 @@ class LocalSimulateBackend(InferenceBackend):
         self.device = device if (device == "cuda" and torch.cuda.is_available()) else "cpu"
         self._is_vl = _is_vl_model(llm_model_name)
 
+        if self.device == "cpu":
+            logger.warning(
+                "CUDA 不可用，模型将运行在 CPU 上。4B 模型在 CPU 上极慢（200s+/查询）。"
+                "建议安装 CUDA 版 PyTorch 或使用 1.5B 小模型。"
+            )
+
         logger.info("device=%s, chunk_size=%s", self.device, self.chunk_size)
         logger.info("multimodal=%s", "yes" if self._is_vl else "no")
 
@@ -225,81 +231,11 @@ class LocalSimulateBackend(InferenceBackend):
         )
 
     def generate_with_thinking(self, messages: list, max_tokens: int = 512):
-        """Qwen3 思考模式生成 —— 返回 (thinking_text, answer_text)。
+        """Qwen3 思考模式生成 —— 真正的 token-by-token 流式。
 
-        使用 apply_chat_template + enable_thinking=True 构建 prompt，
-        通过 token 151668 (</think>) 分离思考过程和最终回答。
-
-        Args:
-            messages: [{"role": "system/user/assistant", "content": "..."}, ...]
-            max_tokens: 最大生成 token 数
-
-        Returns:
-            (thinking_text: str, answer_text: str)
-        """
-        t0 = time.time()
-
-        # 用 chat template 构建 thinking prompt
-        text = self._llm_tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=True,
-        )
-        inputs = self._llm_tokenizer(text, return_tensors="pt").to(self.device)
-        seq_len = inputs["input_ids"].shape[1]
-
-        # eos_token_id 可能是 list（Qwen3: [151645, 151643]），pad 需单值
-        eos_ids = self._llm_tokenizer.eos_token_id
-        pad_id = eos_ids if isinstance(eos_ids, int) else (eos_ids[0] if isinstance(eos_ids, list) else 151645)
-
-        # 思考模式推荐参数：temperature=0.6, top_p=0.95, top_k=20
-        gen_config = GenerationConfig(
-            max_new_tokens=max_tokens,
-            do_sample=True,
-            temperature=0.6,
-            top_p=0.95,
-            top_k=20,
-            eos_token_id=eos_ids,
-            pad_token_id=pad_id,
-        )
-        with torch.no_grad():
-            outputs = self._llm_model.generate(**inputs, generation_config=gen_config)
-
-        # 提取新生成的 token IDs
-        output_ids = outputs[0][seq_len:].tolist()
-
-        logger.info(
-            "GenerateThinking: generated %d new tokens, seq_len=%d",
-            len(output_ids), seq_len
-        )
-
-        # 在 token 151668 (</think>) 处分隔思考和回答
-        try:
-            think_end = len(output_ids) - output_ids[::-1].index(151668)
-        except ValueError:
-            think_end = 0  # 无 </think> 标记，全部视为回答
-
-        thinking_text = self._llm_tokenizer.decode(
-            output_ids[:think_end], skip_special_tokens=True
-        ).strip()
-        answer_text = self._llm_tokenizer.decode(
-            output_ids[think_end:], skip_special_tokens=True
-        ).strip()
-
-        self._last_generate_latency_ms = (time.time() - t0) * 1000
-        logger.info(
-            "GenerateThinking: think_chars=%s, answer_chars=%s, latency=%.1fms",
-            len(thinking_text), len(answer_text), self._last_generate_latency_ms
-        )
-
-        return thinking_text, answer_text
-
-    def generate_stream_with_thinking(self, messages: list, max_tokens: int = 512):
-        """真正的 token-by-token 流式思考模式生成。
-
-        使用 TextIteratorStreamer 逐 token 获取模型输出，
-        在流中检测 </think> 标记（保留 special tokens）分隔思考与回答。
+        使用 TextIteratorStreamer 逐 token 获取输出，
+        保留 special tokens（</think> token 151668），
+        在流中实时检测并分隔思考过程和最终回答。
 
         Yields:
             ("think", str): 思考过程文本片段
@@ -310,7 +246,8 @@ class LocalSimulateBackend(InferenceBackend):
         try:
             from transformers import TextIteratorStreamer
         except ImportError:
-            thinking, answer = self.generate_with_thinking(messages, max_tokens)
+            # 降级：一次性生成
+            thinking, answer = self._generate_with_thinking_sync(messages, max_tokens)
             if thinking:
                 yield ("think", thinking)
             if answer:
@@ -320,7 +257,9 @@ class LocalSimulateBackend(InferenceBackend):
         t0 = time.time()
 
         text = self._llm_tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
             enable_thinking=True,
         )
         inputs = self._llm_tokenizer(text, return_tensors="pt").to(self.device)
@@ -330,7 +269,7 @@ class LocalSimulateBackend(InferenceBackend):
             eos_ids[0] if isinstance(eos_ids, list) else 151645
         )
 
-        # skip_special_tokens=False 保留 </think>，在流中检测边界
+        # skip_special_tokens=False → </think> 会作为普通文本出现在流中
         streamer = TextIteratorStreamer(
             self._llm_tokenizer,
             skip_prompt=True,
@@ -340,7 +279,9 @@ class LocalSimulateBackend(InferenceBackend):
         gen_config = GenerationConfig(
             max_new_tokens=max_tokens,
             do_sample=True,
-            temperature=0.6, top_p=0.95, top_k=20,
+            temperature=0.6,
+            top_p=0.95,
+            top_k=20,
             eos_token_id=eos_ids,
             pad_token_id=pad_id,
         )
@@ -349,6 +290,7 @@ class LocalSimulateBackend(InferenceBackend):
         thread = Thread(target=self._llm_model.generate, kwargs=generation_kwargs, daemon=True)
         thread.start()
 
+        # 流式处理：在 buffer 中检测 </think> 分隔符
         in_thinking = True
         buffer = ""
         THINK_END = "</think>"
@@ -357,6 +299,7 @@ class LocalSimulateBackend(InferenceBackend):
             buffer += new_text
 
             if in_thinking and THINK_END in buffer:
+                # </think> 出现 → 分隔思考与回答
                 idx = buffer.index(THINK_END)
                 think_part = buffer[:idx]
                 if think_part.strip():
@@ -367,22 +310,61 @@ class LocalSimulateBackend(InferenceBackend):
                     yield ("answer", buffer)
                 buffer = ""
             elif in_thinking:
+                # 仍在思考阶段 → 流式 yield 思考文本
                 if buffer.strip():
                     yield ("think", buffer)
                     buffer = ""
             else:
+                # 回答阶段 → 流式 yield 回答文本
                 if buffer.strip():
                     yield ("answer", buffer)
                     buffer = ""
 
+        # 刷新剩余 buffer
         if buffer.strip():
             yield ("answer" if not in_thinking else "think", buffer)
 
         thread.join()
         self._last_generate_latency_ms = (time.time() - t0) * 1000
         logger.info(
-            "GenerateStreamThinking: latency=%.1fms", self._last_generate_latency_ms
+            "GenerateThinking: latency=%.1fms", self._last_generate_latency_ms
         )
+
+    def _generate_with_thinking_sync(self, messages: list, max_tokens: int = 512):
+        """一次性生成（降级方案）。"""
+        t0 = time.time()
+        text = self._llm_tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True,
+            enable_thinking=True,
+        )
+        inputs = self._llm_tokenizer(text, return_tensors="pt").to(self.device)
+        seq_len = inputs["input_ids"].shape[1]
+
+        eos_ids = self._llm_tokenizer.eos_token_id
+        pad_id = eos_ids if isinstance(eos_ids, int) else (eos_ids[0] if isinstance(eos_ids, list) else 151645)
+
+        gen_config = GenerationConfig(
+            max_new_tokens=max_tokens, do_sample=True,
+            temperature=0.6, top_p=0.95, top_k=20,
+            eos_token_id=eos_ids, pad_token_id=pad_id,
+        )
+        with torch.no_grad():
+            outputs = self._llm_model.generate(**inputs, generation_config=gen_config)
+
+        output_ids = outputs[0][seq_len:].tolist()
+        try:
+            think_end = len(output_ids) - output_ids[::-1].index(151668)
+        except ValueError:
+            think_end = 0
+
+        thinking_text = self._llm_tokenizer.decode(
+            output_ids[:think_end], skip_special_tokens=True
+        ).strip()
+        answer_text = self._llm_tokenizer.decode(
+            output_ids[think_end:], skip_special_tokens=True
+        ).strip()
+        self._last_generate_latency_ms = (time.time() - t0) * 1000
+        return thinking_text, answer_text
 
     # ═══════════════════════════════════════════════════════════════
     # 多模态生成（图片 + 文本 → 文本）
