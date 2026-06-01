@@ -10,6 +10,7 @@
 """
 
 import json
+import re
 import asyncio
 import time
 from contextlib import asynccontextmanager
@@ -350,6 +351,10 @@ async def refresh_suggestions(request: Request):
     if backend is None or vector_store is None or vector_store.count() == 0:
         return {"status": "no_data"}
 
+    # 小模型（<3B）输出不可控，跳过 LLM 刷新，依赖增强后的模板算法
+    if _is_small_model(backend):
+        return {"status": "skipped", "reason": "model_too_small"}
+
     import threading
 
     def _run_llm_refresh():
@@ -372,6 +377,28 @@ def invalidate_suggestion_cache():
     """数据变更时清除 LLM 缓存，下次请求退回模板算法。"""
     global _suggestion_cache
     _suggestion_cache = {"suggestions": [], "source": "template"}
+
+
+def _is_small_model(backend) -> bool:
+    """检测当前模型是否为小参数量模型（<3B），不适合做建议生成。"""
+    model_name = getattr(backend, '_llm_model', None)
+    if model_name is None:
+        return True
+    # 检查 HuggingFace config 中的参数量
+    try:
+        config = getattr(model_name, 'config', None) or getattr(backend._llm_model, 'config', None)
+        if config:
+            params = getattr(config, 'num_parameters', 0) or sum(
+                p.numel() for p in backend._llm_model.parameters()
+            )
+            if params > 0 and params < 3_000_000_000:
+                return True
+    except Exception:
+        pass
+    # 回退：通过模型名判断
+    name_lower = str(getattr(backend, '_llm_model', '')).lower()
+    small_indicators = ['1.5b', '1b', '0.5b', '500m', 'tiny', 'small', 'mini']
+    return any(ind in name_lower for ind in small_indicators)
 
 
 def _generate_llm_suggestions(backend, vector_store) -> list:
@@ -436,8 +463,13 @@ def _generate_template_suggestions(vector_store, source_mgr) -> list:
         sample_docs = vector_store.get_sample_documents(n=30)
         all_text = "\n".join(sample_docs)
         if all_text.strip():
-            people_names = extract_people(all_text)
-            topics = extract_topics(all_text, top_n=8)
+            raw_people = extract_people(all_text)
+            raw_topics = extract_topics(all_text, top_n=8)
+            # 过滤噪声实体
+            people_names = [_clean_entity(p, "person") for p in raw_people]
+            people_names = [p for p in people_names if p]
+            topics = [_clean_entity(t, "topic") for t in raw_topics]
+            topics = [t for t in topics if t]
 
     # 2. 从用户画像获取高频词作为补充
     try:
@@ -446,8 +478,9 @@ def _generate_template_suggestions(vector_store, source_mgr) -> list:
         if freq_terms:
             top_terms = sorted(freq_terms.items(), key=lambda x: x[1], reverse=True)[:5]
             for term, count in top_terms:
-                if count >= 2 and term not in topics:
-                    topics.append(term)
+                cleaned = _clean_entity(term, "topic")
+                if count >= 2 and cleaned and cleaned not in topics:
+                    topics.append(cleaned)
     except Exception:
         pass
 
@@ -493,6 +526,57 @@ def _generate_template_suggestions(vector_store, source_mgr) -> list:
             suggestions.append(fallback)
 
     return suggestions[:5]
+
+
+def _clean_entity(text: str, entity_type: str) -> str:
+    """清理和验证提取的实体，过滤噪声。
+
+    Args:
+        text: 原始实体文本
+        entity_type: "person" 或 "topic"
+
+    Returns:
+        清洗后的实体文本，无效实体返回空字符串
+    """
+    if not text or len(text) < 2:
+        return ""
+
+    # 纯数字/日期碎片 → 过滤
+    if text.isdigit():
+        return ""
+    if len(text) <= 3 and all(c.isdigit() or c in "-/:." for c in text):
+        return ""
+
+    # 人名特定过滤
+    if entity_type == "person":
+        # 必须全部是中文常见字符（人名不应含数字、英文、标点）
+        if not all('\u4e00' <= c <= '\u9fff' for c in text):
+            return ""
+        # 长度检查：中文人名通常 2-3 字
+        if len(text) > 4:
+            return ""
+        # 去噪词
+        _person_noise = {
+            "上次", "这次", "下次", "今天", "明天", "昨天", "现在", "之前", "之后",
+            "可以", "可能", "应该", "已经", "还是", "不过", "但是", "因为", "所以",
+            "这个", "那个", "什么", "怎么", "哪里", "哪个",
+            "一个", "一些", "一下", "一起", "一定",
+            "方法", "方向", "方案", "方式", "地方",
+            "我们", "他们", "你们", "不是", "不会", "没有",
+        }
+        if text in _person_noise:
+            return ""
+
+    # 主题词过滤
+    if entity_type == "topic":
+        # 纯数字/符号/英文短串 → 过滤
+        if len(text) <= 2 and not all('\u4e00' <= c <= '\u9fff' for c in text):
+            return ""
+        # 过滤明显的时间碎片
+        if re.match(r'^\d{2,4}[-/年]?\d{0,2}[-/月]?\d{0,2}[日号]?$', text):
+            return ""
+
+    return text.strip()
 
 
 # ═══════════════════════════════════════════════════════════
