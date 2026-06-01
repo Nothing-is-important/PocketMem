@@ -14,7 +14,7 @@ from typing import List, Optional
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
-from transformers import AutoProcessor, AutoTokenizer
+from transformers import AutoProcessor, AutoTokenizer, GenerationConfig
 
 from .base import InferenceBackend
 from utils import get_logger
@@ -144,19 +144,16 @@ class LocalSimulateBackend(InferenceBackend):
                 seq_len, self.chunk_size, num_chunks
             )
 
+        gen_config = GenerationConfig(
+            max_new_tokens=max_tokens,
+            do_sample=False,
+            repetition_penalty=1.1,
+            no_repeat_ngram_size=3,
+            eos_token_id=self._llm_tokenizer.eos_token_id,
+            pad_token_id=self._llm_tokenizer.eos_token_id,
+        )
         with torch.no_grad():
-            outputs = self._llm_model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                do_sample=False,  # 1.5B 小模型采样模式输出失控，保持贪心解码
-                temperature=0.7,
-                top_p=0.8,
-                top_k=20,
-                repetition_penalty=1.1,
-                no_repeat_ngram_size=3,
-                eos_token_id=self._llm_tokenizer.eos_token_id,
-                pad_token_id=self._llm_tokenizer.eos_token_id,
-            )
+            outputs = self._llm_model.generate(**inputs, generation_config=gen_config)
 
         generated_ids = outputs[0][inputs["input_ids"].shape[1]:]
         result = self._llm_tokenizer.decode(generated_ids, skip_special_tokens=True)
@@ -197,17 +194,18 @@ class LocalSimulateBackend(InferenceBackend):
             skip_special_tokens=True,
         )
 
-        generation_kwargs = dict(
-            **inputs,
+        gen_config = GenerationConfig(
             max_new_tokens=max_tokens,
-            do_sample=False,  # 1.5B 小模型采样模式输出失控，保持贪心解码
-            temperature=0.7,
-            top_p=0.8,
-            top_k=20,
+            do_sample=False,
             repetition_penalty=1.1,
             no_repeat_ngram_size=3,
             eos_token_id=self._llm_tokenizer.eos_token_id,
             pad_token_id=self._llm_tokenizer.eos_token_id,
+        )
+
+        generation_kwargs = dict(
+            **inputs,
+            generation_config=gen_config,
             streamer=streamer,
         )
 
@@ -256,17 +254,17 @@ class LocalSimulateBackend(InferenceBackend):
         pad_id = eos_ids if isinstance(eos_ids, int) else (eos_ids[0] if isinstance(eos_ids, list) else 151645)
 
         # 思考模式推荐参数：temperature=0.6, top_p=0.95, top_k=20
+        gen_config = GenerationConfig(
+            max_new_tokens=max_tokens,
+            do_sample=True,
+            temperature=0.6,
+            top_p=0.95,
+            top_k=20,
+            eos_token_id=eos_ids,
+            pad_token_id=pad_id,
+        )
         with torch.no_grad():
-            outputs = self._llm_model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                do_sample=True,
-                temperature=0.6,
-                top_p=0.95,
-                top_k=20,
-                eos_token_id=eos_ids,
-                pad_token_id=pad_id,
-            )
+            outputs = self._llm_model.generate(**inputs, generation_config=gen_config)
 
         # 提取新生成的 token IDs
         output_ids = outputs[0][seq_len:].tolist()
