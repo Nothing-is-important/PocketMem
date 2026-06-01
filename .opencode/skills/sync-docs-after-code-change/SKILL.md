@@ -1,6 +1,10 @@
 ---
 name: sync-docs-after-code-change
-description: After making any code change in this project, automatically sync the relevant documentation. This skill should be used whenever code is modified—especially changes to agent logic, backend parameters, frontend UI, prompts, or API endpoints. It ensures README.md, PocketMemory-教学文档.md, and docs/开发问题与优化方案.md stay in sync with the actual implementation.
+description: >-
+  TRIGGER: After ANY edit/write/change to Python files (.py), YAML prompts, frontend HTML, or API endpoints.
+  Automatically sync README.md, PocketMemory-教学文档.md, and docs/开发问题与优化方案.md with the code changes.
+  Use after modifying agent/, backend/, api/, config/, frontend/, data_ingestion/, or rag/ directories.
+  Triggers on: code change, edit file, modify code, implement feature, fix bug, optimize, refactor.
 ---
 
 # Sync Docs After Code Change
