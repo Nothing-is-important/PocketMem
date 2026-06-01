@@ -648,18 +648,16 @@ createApp({
       ],
       latency: { embed: null, retrieval: null, judge: null, generate: null, total: null },
       showLatency: false,
-      suggestions: [
-        '张三推荐了哪家火锅店？',
-        '团建大家都提了哪些地方？',
-        '我的笔记里关于Transformer写了什么？',
-        '李四面试了哪家公司？',
-        '端侧推理优化有哪些方法？',
-      ],
+      suggestions: [],  // 动态加载，基于已索引数据生成
       sources: [], totalChunks: 0, watchDir: '',
       scanning: false, scanResult: null,
       wechatStatus: { running: false, wxid: null, hint: '', can_import: false },
       importing: false, importResult: '',
       thinkingMsg: null,
+
+      // ── Suggestion refresh tracking ──
+      _suggestionsRefreshed: false,
+      _suggestionsPollTimer: null,
 
       // ── Progress cycling ──
       cycleInterval: null,
@@ -681,9 +679,14 @@ createApp({
     this.loadWatchDir();
     this.checkWechatStatus();
     this.loadSources();
+    this.loadSuggestions();
   },
   beforeUnmount() {
     this._stopCycle();
+    if (this._suggestionsPollTimer) {
+      clearTimeout(this._suggestionsPollTimer);
+      this._suggestionsPollTimer = null;
+    }
   },
   methods: {
     // ── Cycling prompt control ──
@@ -749,6 +752,31 @@ createApp({
         this.watchDir = d.watch_dir || this.watchDir;
       } catch { /* silently fail */ }
     },
+    async loadSuggestions() {
+      try {
+        const r = await fetch('/data/suggestions');
+        const d = await r.json();
+        if (d.suggestions && d.suggestions.length) {
+          this.suggestions = d.suggestions;
+        }
+      } catch { /* keep current suggestions */ }
+    },
+    _triggerSuggestionRefresh() {
+      // 仅首次查询时触发一次 LLM 后台刷新
+      if (this._suggestionsRefreshed) return;
+      this._suggestionsRefreshed = true;
+
+      // Fire-and-forget：不阻塞 UI
+      fetch('/data/suggestions/refresh', { method: 'POST' }).catch(() => {});
+
+      // 延迟轮询：等 LLM 生成完成后拉取新推荐
+      this._suggestionsPollTimer = setTimeout(() => {
+        this.loadSuggestions();
+        this._suggestionsPollTimer = setTimeout(() => {
+          this.loadSuggestions();
+        }, 5000);
+      }, 6000);
+    },
     async scanSources() {
       this.scanning = true;
       this.scanResult = null;
@@ -764,6 +792,7 @@ createApp({
           ? { msg: `新增 ${d.new_files} 个文件, ${d.new_chunks} 个片段` }
           : { msg: '没有发现新文件' };
         await this.loadSources();
+        this.loadSuggestions();  // 新数据可能带来新的推荐问题
       } catch (e) {
         this.scanResult = { error: '失败: ' + e.message };
       } finally {
@@ -780,7 +809,7 @@ createApp({
         this.importResult = d.status === 'ok'
           ? (d.chunks ? `已导入 ${d.chunks} 条消息片段` : '导入完成')
           : (d.error || '导入失败');
-        if (d.status === 'ok') this.loadSources();
+        if (d.status === 'ok') { this.loadSources(); this.loadSuggestions(); }
       } catch (e) {
         this.importResult = '失败: ' + e.message;
       } finally {
@@ -830,10 +859,20 @@ createApp({
       this.updateProgress();
 
       try {
+        // 构建多轮对话历史（最近 3 轮）
+        const history = [];
+        const msgs = this.messages;
+        for (let i = msgs.length - 1; i >= 0 && history.length < 3; i--) {
+          if (msgs[i].role === 'assistant' && i > 0 && msgs[i - 1].role === 'user') {
+            history.unshift({ query: msgs[i - 1].content, answer: msgs[i].content });
+            i--; // 跳过已配对的 user 消息
+          }
+        }
+
         const response = await fetch('/ask/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q }),
+          body: JSON.stringify({ query: q, conversation_history: history }),
         });
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -902,6 +941,8 @@ createApp({
           const c = this.$refs.msgContainer;
           if (c) c.scrollTop = c.scrollHeight;
         });
+        // 首次查询后，后台触发 LLM 生成更优质的推荐问题
+        this._triggerSuggestionRefresh();
       }
     },
 

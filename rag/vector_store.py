@@ -131,6 +131,27 @@ class VectorStore:
         if all_ids:
             self._collection.delete(ids=all_ids)
 
+    def get_sample_documents(self, n: int = 20) -> List[str]:
+        """获取样本文档内容（用于实体提取等离线分析）。
+
+        Args:
+            n: 返回的最大文档数
+
+        Returns:
+            文档内容字符串列表
+        """
+        if self._collection.count() == 0:
+            return []
+        try:
+            result = self._collection.get(
+                limit=min(n, self._collection.count()),
+                include=["documents"],
+            )
+            docs = result.get("documents", [])
+            return [d for d in docs if d and d.strip()] if docs else []
+        except Exception:
+            return []
+
     def get_collection_stats(self) -> Dict:
         """获取集合统计信息。"""
         return {

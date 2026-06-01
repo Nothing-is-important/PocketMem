@@ -276,6 +276,8 @@ async def ingest_data(req: IngestRequest, request: Request):
         indexer=indexer,
         directory=directory,
     )
+    # 数据变更后清除 LLM 推荐缓存，下次请求退回模板算法
+    invalidate_suggestion_cache()
     return IngestResponse(**result)
 
 
@@ -294,6 +296,203 @@ async def watched_directory(request: Request):
         },
         "usage": "将文件放入 watch_dir 后，调用 POST /ingest 即可自动索引",
     }
+
+
+# ═══════════════════════════════════════════════════════════
+# 推荐问题（混合方案：模板秒开 → LLM 后台升级）
+# ═══════════════════════════════════════════════════════════
+
+# 模块级缓存
+_suggestion_cache: dict = {"suggestions": [], "source": "template"}
+_refresh_in_progress: bool = False
+
+
+@app.get("/data/suggestions")
+async def data_suggestions(request: Request):
+    """返回推荐问题（优先 LLM 缓存，降级模板算法）。
+
+    混合策略：
+    - 页面加载：模板算法（<5ms，秒开）
+    - 首次查询后：异步触发 LLM 生成
+    - 后续加载：直接读 LLM 缓存
+    """
+    # LLM 缓存命中 → 直接返回
+    if _suggestion_cache["source"] == "llm" and _suggestion_cache["suggestions"]:
+        return _suggestion_cache
+
+    # 降级：模板算法生成
+    vector_store = getattr(request.app.state, "vector_store", None)
+    source_mgr = getattr(request.app.state, "source_manager", None)
+    suggestions = _generate_template_suggestions(vector_store, source_mgr)
+
+    # 更新模板缓存
+    _suggestion_cache["suggestions"] = suggestions
+    _suggestion_cache["source"] = "template"
+
+    return {"suggestions": suggestions, "source": "template"}
+
+
+@app.post("/data/suggestions/refresh")
+async def refresh_suggestions(request: Request):
+    """后台用 LLM 重新生成推荐问题（异步，立即返回）。
+
+    前端应在用户首次查询后调用此端点（fire-and-forget），
+    后续 GET /data/suggestions 将返回 LLM 生成的优质问题。
+    """
+    global _refresh_in_progress
+
+    if _refresh_in_progress:
+        return {"status": "already_refreshing"}
+
+    backend = getattr(request.app.state, "backend", None)
+    vector_store = getattr(request.app.state, "vector_store", None)
+
+    if backend is None or vector_store is None or vector_store.count() == 0:
+        return {"status": "no_data"}
+
+    import threading
+
+    def _run_llm_refresh():
+        global _suggestion_cache, _refresh_in_progress
+        try:
+            suggestions = _generate_llm_suggestions(backend, vector_store)
+            _suggestion_cache = {"suggestions": suggestions, "source": "llm"}
+        except Exception as e:
+            _log_event("suggestions", f"LLM refresh failed: {e}")
+        finally:
+            _refresh_in_progress = False
+
+    _refresh_in_progress = True
+    thread = threading.Thread(target=_run_llm_refresh, daemon=True)
+    thread.start()
+    return {"status": "refreshing"}
+
+
+def invalidate_suggestion_cache():
+    """数据变更时清除 LLM 缓存，下次请求退回模板算法。"""
+    global _suggestion_cache
+    _suggestion_cache = {"suggestions": [], "source": "template"}
+
+
+def _generate_llm_suggestions(backend, vector_store) -> list:
+    """用 LLM 生成自然语言推荐问题。
+
+    Args:
+        backend: InferenceBackend 实例（已加载 LLM）
+        vector_store: VectorStore 实例
+
+    Returns:
+        ["问题1", "问题2", ...] — 最多 5 个
+    """
+    sample_docs = vector_store.get_sample_documents(n=20)
+    if not sample_docs:
+        return _generate_template_suggestions(vector_store, None)
+
+    # 拼接样本文档（截断避免 prompt 过长）
+    doc_text = "\n---\n".join(doc[:200] for doc in sample_docs[:15])
+    if len(doc_text) > 3000:
+        doc_text = doc_text[:3000] + "\n..."
+
+    prompt = f"""你是一个智能记忆助手。根据以下用户的记忆片段，生成 5 个简短、自然的推荐搜索问题。
+要求：
+- 每个问题不超过 15 个字
+- 问题要多样化，覆盖不同人物和话题
+- 用口语化中文，像真人会问的问题
+- 只输出问题本身，每行一个，不要编号、不要解释
+
+记忆片段：
+{doc_text}
+
+推荐问题："""
+
+    try:
+        raw = backend.generate(prompt, max_tokens=150)
+        lines = [line.strip() for line in raw.strip().split("\n") if line.strip()]
+        # 清洗：去掉可能的编号前缀
+        suggestions = []
+        for line in lines:
+            cleaned = line.lstrip("0123456789.、)） ").strip()
+            if cleaned and len(cleaned) >= 4:
+                suggestions.append(cleaned)
+        if suggestions:
+            return suggestions[:5]
+    except Exception:
+        pass
+
+    # LLM 失败时降级到模板
+    return _generate_template_suggestions(vector_store, None)
+
+
+def _generate_template_suggestions(vector_store, source_mgr) -> list:
+    """基于已索引数据用模板算法动态生成推荐问题。"""
+    from collections import Counter
+    from rag.entity_extractor import extract_people, extract_topics
+
+    people_names: list = []
+    topics: list = []
+
+    # 1. 从向量库采样文档，提取实体
+    if vector_store is not None and vector_store.count() > 0:
+        sample_docs = vector_store.get_sample_documents(n=30)
+        all_text = "\n".join(sample_docs)
+        if all_text.strip():
+            people_names = extract_people(all_text)
+            topics = extract_topics(all_text, top_n=8)
+
+    # 2. 从用户画像获取高频词作为补充
+    try:
+        from agent.user_profile import profile
+        freq_terms = profile._data.get("query_stats", {}).get("frequent_terms", {})
+        if freq_terms:
+            top_terms = sorted(freq_terms.items(), key=lambda x: x[1], reverse=True)[:5]
+            for term, count in top_terms:
+                if count >= 2 and term not in topics:
+                    topics.append(term)
+    except Exception:
+        pass
+
+    # 3. 模板生成
+    person_templates = [
+        "{name}推荐了什么东西？",
+        "{name}最近在做什么？",
+        "关于{name}大家都讨论了什么？",
+    ]
+    topic_templates = [
+        "我的笔记里关于{topic}写了什么？",
+        "{topic}有哪些方法？",
+        "关于{topic}有什么讨论？",
+    ]
+    generic_defaults = [
+        "最近有什么重要的事？",
+        "大家都在讨论什么话题？",
+        "张三推荐了哪家火锅店？",
+        "我的笔记里关于AI写了什么？",
+        "端侧推理优化有哪些方法？",
+    ]
+
+    suggestions = []
+
+    # 用人名生成问题
+    name_counter = Counter(people_names)
+    for name, _ in name_counter.most_common(3):
+        tmpl = person_templates[len(suggestions) % len(person_templates)]
+        suggestions.append(tmpl.format(name=name))
+
+    # 用主题词生成问题
+    for topic in topics:
+        if len(suggestions) >= 5:
+            break
+        if topic not in {s.replace("{name}", "").replace("{topic}", "") for s in suggestions}:
+            tmpl = topic_templates[len(suggestions) % len(topic_templates)]
+            suggestions.append(tmpl.format(topic=topic))
+
+    # 兜底：用通用默认问题填满
+    while len(suggestions) < 5:
+        fallback = generic_defaults[len(suggestions) % len(generic_defaults)]
+        if fallback not in suggestions:
+            suggestions.append(fallback)
+
+    return suggestions[:5]
 
 
 # ═══════════════════════════════════════════════════════════

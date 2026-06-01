@@ -100,11 +100,15 @@ def setup():
             src = chunk.metadata.get("source_file", "")
             file_chunk_counts[src] = file_chunk_counts.get(src, 0) + 1
 
+        # 后缀 → 类型映射（demo 目录下的 .txt 为本地聊天记录，不是微信导入）
+        _suffix_type_map = {".txt": "text", ".md": "markdown", ".markdown": "markdown", ".pdf": "pdf"}
+
         for f in demo_dir_path.rglob("*"):
             if f.suffix in (".txt", ".md", ".pdf"):
                 fpath = str(f)
                 count = file_chunk_counts.get(fpath, 0)
-                source_mgr.mark_indexed(fpath, chunk_count=count)
+                source_type = _suffix_type_map.get(f.suffix, "text")
+                source_mgr.mark_indexed(fpath, chunk_count=count, source_type=source_type)
     # 同时扫描 data/raw 目录（用户放置真实微信导出的地方）
     raw_sources = source_mgr.scan()
     if raw_sources:

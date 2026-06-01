@@ -235,6 +235,9 @@ class SourceManager:
                         name = Path(path).name
                         break
             if not name:
+                # 安全回退：尝试从 key 本身提取文件名（mark_indexed 以文件路径为 key）
+                name = Path(file_hash).name
+            if not name:
                 name = f"file_{file_hash[:8]}"
             sources_info.append({
                 "name": name,
@@ -257,8 +260,11 @@ class SourceManager:
     def mark_indexed(self, filepath: str, chunk_count: int = 0, source_type: str = ""):
         """手动标记文件为已索引。"""
         self._indexed_files[filepath] = {
+            "filepath": filepath,
+            "filename": Path(filepath).name,
             "indexed_at": datetime.now().isoformat(),
             "chunk_count": chunk_count,
+            "message_count": 0,
             "type": source_type,
         }
 
