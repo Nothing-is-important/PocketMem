@@ -22,6 +22,7 @@ class AgentState(TypedDict):
     reflect_queries: List[str]
     reflect_count: int
     final_answer: str
+    _thinking: str  # Qwen3 思考过程（不对外暴露，仅 SSE 使用）
     latency_stats: Dict[str, float]
     # 多轮对话支持
     conversation_history: List[Dict[str, str]]  # [{"query": "...", "answer": "..."}, ...]
@@ -42,6 +43,7 @@ def create_initial_state(query: str, conversation_history: list = None) -> Agent
         reflect_queries=[],
         reflect_count=0,
         final_answer="",
+        _thinking="",
         latency_stats={},
         conversation_history=conversation_history or [],
         user_context="",
