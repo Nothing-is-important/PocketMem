@@ -295,6 +295,95 @@ class LocalSimulateBackend(InferenceBackend):
 
         return thinking_text, answer_text
 
+    def generate_stream_with_thinking(self, messages: list, max_tokens: int = 512):
+        """真正的 token-by-token 流式思考模式生成。
+
+        使用 TextIteratorStreamer 逐 token 获取模型输出，
+        在流中检测 </think> 标记（保留 special tokens）分隔思考与回答。
+
+        Yields:
+            ("think", str): 思考过程文本片段
+            ("answer", str): 最终回答文本片段
+        """
+        from threading import Thread
+
+        try:
+            from transformers import TextIteratorStreamer
+        except ImportError:
+            thinking, answer = self.generate_with_thinking(messages, max_tokens)
+            if thinking:
+                yield ("think", thinking)
+            if answer:
+                yield ("answer", answer)
+            return
+
+        t0 = time.time()
+
+        text = self._llm_tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True,
+            enable_thinking=True,
+        )
+        inputs = self._llm_tokenizer(text, return_tensors="pt").to(self.device)
+
+        eos_ids = self._llm_tokenizer.eos_token_id
+        pad_id = eos_ids if isinstance(eos_ids, int) else (
+            eos_ids[0] if isinstance(eos_ids, list) else 151645
+        )
+
+        # skip_special_tokens=False 保留 </think>，在流中检测边界
+        streamer = TextIteratorStreamer(
+            self._llm_tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=False,
+        )
+
+        gen_config = GenerationConfig(
+            max_new_tokens=max_tokens,
+            do_sample=True,
+            temperature=0.6, top_p=0.95, top_k=20,
+            eos_token_id=eos_ids,
+            pad_token_id=pad_id,
+        )
+
+        generation_kwargs = dict(**inputs, generation_config=gen_config, streamer=streamer)
+        thread = Thread(target=self._llm_model.generate, kwargs=generation_kwargs, daemon=True)
+        thread.start()
+
+        in_thinking = True
+        buffer = ""
+        THINK_END = "</think>"
+
+        for new_text in streamer:
+            buffer += new_text
+
+            if in_thinking and THINK_END in buffer:
+                idx = buffer.index(THINK_END)
+                think_part = buffer[:idx]
+                if think_part.strip():
+                    yield ("think", think_part)
+                in_thinking = False
+                buffer = buffer[idx + len(THINK_END):]
+                if buffer.strip():
+                    yield ("answer", buffer)
+                buffer = ""
+            elif in_thinking:
+                if buffer.strip():
+                    yield ("think", buffer)
+                    buffer = ""
+            else:
+                if buffer.strip():
+                    yield ("answer", buffer)
+                    buffer = ""
+
+        if buffer.strip():
+            yield ("answer" if not in_thinking else "think", buffer)
+
+        thread.join()
+        self._last_generate_latency_ms = (time.time() - t0) * 1000
+        logger.info(
+            "GenerateStreamThinking: latency=%.1fms", self._last_generate_latency_ms
+        )
+
     # ═══════════════════════════════════════════════════════════════
     # 多模态生成（图片 + 文本 → 文本）
     # ═══════════════════════════════════════════════════════════════

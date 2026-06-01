@@ -201,40 +201,56 @@ async def ask_stream(req: AskRequest, request: Request):
                     }})}
                     await asyncio.sleep(0.3)
                 elif node_name == "generate":
-                    # 思考模式：流式推送思考过程 + 逐字推送回答
+                    # 真正的流式思考模式生成
                     backend = getattr(request.app.state, "backend", None)
                     latency_stats = node_state.get("latency_stats", {})
-                    thinking = node_state.get("_thinking", "")
-                    final_answer = node_state.get("final_answer", "")
 
-                    # 先推送思考开始标记
-                    if thinking:
-                        yield {"data": json.dumps({
-                            "event": "think_start",
-                            "data": "",
-                            "latency_ms": latency_stats.get("generate_ms", 0),
-                        })}
-                        await asyncio.sleep(0.05)
+                    if backend and hasattr(backend, 'generate_stream_with_thinking'):
+                        from agent.generator import build_thinking_messages
+                        messages = build_thinking_messages(node_state)
 
-                        # 逐字流式推送思考过程
-                        chunk_size = 2
-                        for i in range(0, len(thinking), chunk_size):
-                            yield {"data": json.dumps({
-                                "event": "think_token",
-                                "data": thinking[i:i + chunk_size],
-                            })}
-                            await asyncio.sleep(0.015)
-                        await asyncio.sleep(0.1)
-
-                    # 逐字流式推送回答
-                    if final_answer:
-                        chunk_size = 3
-                        for i in range(0, len(final_answer), chunk_size):
-                            yield {"data": json.dumps({
-                                "event": "generate_token",
-                                "data": final_answer[i:i + chunk_size],
-                            })}
-                            await asyncio.sleep(0.03)
+                        # 逐 token 流式生成，检测 </think> 分隔
+                        first_think = True
+                        for event_type, text in backend.generate_stream_with_thinking(
+                            messages, max_tokens=512
+                        ):
+                            if event_type == "think":
+                                if first_think:
+                                    yield {"data": json.dumps({
+                                        "event": "think_start",
+                                        "data": "",
+                                    })}
+                                    first_think = False
+                                yield {"data": json.dumps({
+                                    "event": "think_token",
+                                    "data": text,
+                                })}
+                            elif event_type == "answer":
+                                yield {"data": json.dumps({
+                                    "event": "generate_token",
+                                    "data": text,
+                                })}
+                            await asyncio.sleep(0.005)
+                    else:
+                        # 降级：从 state 读取（模拟流式）
+                        thinking = node_state.get("_thinking", "")
+                        final_answer = node_state.get("final_answer", "")
+                        if thinking:
+                            yield {"data": json.dumps({"event": "think_start", "data": ""})}
+                            chunk_size = 2
+                            for i in range(0, len(thinking), chunk_size):
+                                yield {"data": json.dumps({
+                                    "event": "think_token",
+                                    "data": thinking[i:i + chunk_size],
+                                })}
+                                await asyncio.sleep(0.015)
+                        if final_answer:
+                            for i in range(0, len(final_answer), 3):
+                                yield {"data": json.dumps({
+                                    "event": "generate_token",
+                                    "data": final_answer[i:i + 3],
+                                })}
+                                await asyncio.sleep(0.03)
 
                     gen_latency = latency_stats.get("generate_ms", 0)
                     yield {"data": json.dumps({
