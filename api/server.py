@@ -161,7 +161,10 @@ async def ask_stream(req: AskRequest, request: Request):
         query = req.query.strip()
         yield {"data": json.dumps({"event": "start", "data": query})}
 
-        state_data = create_initial_state(query)
+        state_data = create_initial_state(
+            query,
+            conversation_history=req.conversation_history or [],
+        )
 
         try:
             async for event in agent_graph.astream(state_data):
@@ -197,25 +200,31 @@ async def ask_stream(req: AskRequest, request: Request):
                     }})}
                     await asyncio.sleep(0.3)
                 elif node_name == "generate":
-                    # 流式生成：逐 token 推送
-                    final_answer = node_state.get("final_answer", "")
+                    # 真正的 token-by-token 流式生成
+                    from agent.generator import build_generator_prompt, GENERATOR_MAX_TOKENS
+                    
+                    prompt = build_generator_prompt(node_state)
                     latency_stats = node_state.get("latency_stats", {})
-                    if final_answer:
-                        # 逐字符分块推送，加异步延迟实现前端流式打字效果
-                        chunk_size = 5
-                        for i in range(0, len(final_answer), chunk_size):
-                            chunk = final_answer[i:i + chunk_size]
-                            yield {"data": json.dumps({
-                                "event": "generate_token",
-                                "data": chunk,
-                            })}
-                            await asyncio.sleep(0.05)  # 50ms 间隔，确保前端有时间渲染每个chunk
+                    gen_t0 = time.time()
+                    
+                    # 使用 backend.generate_stream 逐 token 推送
+                    backend = getattr(request.app.state, "backend", None)
+                    if backend and hasattr(backend, 'generate_stream'):
+                        for token_chunk in backend.generate_stream(prompt, max_tokens=GENERATOR_MAX_TOKENS):
+                            if token_chunk:
+                                yield {"data": json.dumps({
+                                    "event": "generate_token",
+                                    "data": token_chunk,
+                                })}
+                                await asyncio.sleep(0.01)
+                    
+                    gen_latency = (time.time() - gen_t0) * 1000
                     yield {"data": json.dumps({
                         "event": "generate",
-                        "data": final_answer,
-                        "latency_ms": latency_stats.get("generate_ms", 0),
+                        "data": "",
+                        "latency_ms": gen_latency,
                     })}
-                    _log_event("generate", f"生成{len(final_answer)}字", chars=len(final_answer))
+                    _log_event("generate", f"流式生成完成", latency=gen_latency)
         except Exception as e:
             yield {"data": json.dumps({"event": "error", "data": str(e)})}
 

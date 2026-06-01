@@ -8,4 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+
+# ChromaDB data (generated at runtime)
+data/chroma_db*/
+data/*.sqlite3
+
+# Test cache
+.pytest_cache/
+
+# Session files
+.omo/
 data/

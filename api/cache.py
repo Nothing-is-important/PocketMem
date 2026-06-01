@@ -1,50 +1,21 @@
-"""双层语义缓存。
-
-L1 精确缓存: 基于 MD5 查询键的 LRU 缓存，TTL 5 分钟
-L2 语义缓存: 基于向量相似度的缓存（余弦相似度 > 0.95），TTL 30 分钟
+"""语义缓存。
+L2 语义缓存: 基于向量相似度的缓存（余弦相似度 > 阈值），支持查询归一化提升命中率。
 """
-
-import hashlib
+import re
 import time
-from collections import OrderedDict
 from typing import Any, List, Optional
 
+import numpy as np
 
-class LRUCache:
-    """L1 精确缓存 —— 相同查询直接返回缓存结果。"""
 
-    def __init__(self, capacity: int = 128, ttl_seconds: int = 300):
-        self._capacity = capacity
-        self._ttl = ttl_seconds
-        self._store: OrderedDict = OrderedDict()
-
-    def get(self, key: str) -> Optional[Any]:
-        if key not in self._store:
-            return None
-
-        entry = self._store[key]
-        if time.time() - entry["ts"] > self._ttl:
-            del self._store[key]
-            return None
-
-        # LRU: 移到最后
-        self._store.move_to_end(key)
-        return entry["value"]
-
-    def set(self, key: str, value: Any):
-        if key in self._store:
-            self._store.move_to_end(key)
-        else:
-            if len(self._store) >= self._capacity:
-                self._store.popitem(last=False)
-        self._store[key] = {"value": value, "ts": time.time()}
-
-    def clear(self):
-        self._store.clear()
+def _normalize_query(query: str) -> str:
+    """查询归一化：去标点、去多余空格、小写，提升缓存命中率。"""
+    query = re.sub(r'[，。！？、；：""''（）【】《》\s]+', '', query)
+    return query.strip().lower()
 
 
 class SemanticCache:
-    """L2 语义缓存 —— 相似查询返回缓存结果。"""
+    """语义缓存 —— 相似查询返回缓存结果。"""
 
     def __init__(
         self,
@@ -106,7 +77,7 @@ class SemanticCache:
 
 
 class TwoTierCache:
-    """L1 + L2 双层缓存协调器。"""
+    """语义缓存协调器（仅保留 L2 语义层，L1 精确匹配命中率接近 0）。"""
 
     def __init__(
         self,
@@ -116,7 +87,7 @@ class TwoTierCache:
         l2_threshold: float = 0.95,
         l2_ttl: int = 1800,
     ):
-        self._l1 = LRUCache(capacity=l1_capacity, ttl_seconds=l1_ttl)
+        # 保留初始化参数签名兼容性，但只使用 L2
         self._l2 = SemanticCache(
             embedding_fn=embedding_fn,
             threshold=l2_threshold,
@@ -124,31 +95,17 @@ class TwoTierCache:
         )
 
     def lookup(self, query: str) -> Optional[dict]:
-        """双层查询：先 L1 精确匹配，再 L2 语义匹配。"""
-        l1_key = hashlib.md5(query.encode("utf-8")).hexdigest()
-
-        # L1: 精确缓存
-        result = self._l1.get(l1_key)
-        if result is not None:
-            result["cache_tier"] = "L1"
-            return result
-
-        # L2: 语义缓存
-        result = self._l2.get(query)
+        """语义缓存查询（归一化后匹配）。"""
+        normalized = _normalize_query(query)
+        result = self._l2.get(normalized)
         if result is not None:
             result["cache_tier"] = "L2"
-            # 写入 L1 以加速后续相同查询
-            self._l1.set(l1_key, result)
-            return result
-
-        return None
+        return result
 
     def store(self, query: str, result: dict):
-        """同时写入两级缓存。"""
-        l1_key = hashlib.md5(query.encode("utf-8")).hexdigest()
-        self._l1.set(l1_key, result)
-        self._l2.set(query, result)
+        """写入语义缓存。"""
+        normalized = _normalize_query(query)
+        self._l2.set(normalized, result)
 
     def clear(self):
-        self._l1.clear()
         self._l2.clear()

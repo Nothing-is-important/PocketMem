@@ -79,8 +79,16 @@ def create_memory_judge_node(
             if reflect_query:
                 state["reflect_queries"].append(reflect_query)
                 state["reflect_count"] += 1
-                # 组合查询用于补充检索
                 state["query"] = f"{query} {reflect_query}"
+        # 降级策略：Reflect 次数用尽但仍不足时，降低阈值再试
+        elif not sufficient and state["reflect_count"] >= max_reflect_iterations:
+            degraded = _composite_scoring(results, state.get("extracted_entities", {}))
+            # 降级阈值：原阈值的一半
+            degraded_threshold = relevance_threshold * 0.5
+            fallback = [r for r in degraded if r["composite_score"] >= degraded_threshold]
+            if len(fallback) > len(deduped):
+                state["memory_context"] = _deduplicate_chunks(fallback)
+                state["context_sufficient"] = True  # 降级放宽后标记为充足
 
         state["messages"].append({
             "role": "judge",

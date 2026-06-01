@@ -17,6 +17,78 @@ from config.prompts import prompts
 GENERATOR_MAX_TOKENS = 512
 
 
+def build_generator_prompt(state: AgentState) -> str:
+    """从 AgentState 构建最终生成 prompt（流式和非流式共用）。"""
+    query = state["query"]
+    memory_context = state.get("memory_context", [])
+    temporal_context = state.get("temporal_context", "")
+    user_context = state.get("user_context", "")
+    # 多轮对话：注入最近 3 轮历史
+    conv_ctx = _build_conversation_context(state.get("conversation_history", []))
+
+    if not memory_context:
+        prompt = _build_no_context_prompt(query, user_context)
+        return _inject_conv(prompt, conv_ctx)
+    elif len(memory_context) >= 2:
+        facts = _extract_facts_no_cache(state)
+        state["extracted_facts"] = facts
+        prompt = _build_fact_prompt(query, facts, temporal_context, user_context)
+        return _inject_conv(prompt, conv_ctx)
+    else:
+        prompt = _build_context_prompt(query, memory_context, temporal_context, user_context)
+        return _inject_conv(prompt, conv_ctx)
+
+
+def _build_conversation_context(history: list) -> str:
+    """构建多轮对话上下文。"""
+    if not history:
+        return ""
+    recent = history[-3:]  # 最近 3 轮
+    lines = ["\n之前的对话："]
+    for i, turn in enumerate(recent):
+        lines.append(f"用户：{turn.get('query', '')}")
+        lines.append(f"助手：{turn.get('answer', '')}")
+    return "\n".join(lines)
+
+
+def _inject_conv(prompt: str, conv_ctx: str) -> str:
+    """将对话上下文注入 prompt（插入到 system prompt 之后）。"""
+    if not conv_ctx:
+        return prompt
+    # 在第一个空行后插入对话上下文
+    parts = prompt.split("\n\n", 1)
+    if len(parts) == 2:
+        return parts[0] + "\n" + conv_ctx + "\n\n" + parts[1]
+    return prompt + "\n" + conv_ctx
+
+
+def _extract_facts_no_cache(state: AgentState) -> str:
+    """从 memory_context 提取事实（无 backend 版本，用于 prompt 构建后流式调用）。"""
+    memory_context = state.get("memory_context", [])
+    chunk_texts = []
+    for i, item in enumerate(memory_context[:3]):
+        content = item.get("content", "")
+        meta = item.get("metadata", {})
+        ts = meta.get("timestamp", "")[:10] if meta.get("timestamp") else ""
+        participants = meta.get("participants", "")
+        if isinstance(participants, list):
+            participants = ", ".join(participants)
+        label = f"片段{i+1}"
+        if ts:
+            label += f" ({ts}"
+            if participants:
+                label += f", {participants}"
+            label += ")"
+        if len(content) > 300:
+            focused = content[:150] + "\n...\n" + content[-150:]
+        else:
+            focused = content
+        chunk_texts.append(f"{label}:\n{focused}")
+
+    chunks_text = "\n\n".join(chunk_texts)
+    return prompts.get("fact_extractor").format(query=state["query"], chunks_text=chunks_text)
+
+
 def create_generator_node(backend, enable_fact_extraction: bool = True):
     """创建答案生成节点。
 
@@ -28,28 +100,8 @@ def create_generator_node(backend, enable_fact_extraction: bool = True):
     def generator_node(state: AgentState) -> AgentState:
         t0 = time.time()
 
-        query = state["query"]
-        memory_context = state.get("memory_context", [])
-        temporal_context = state.get("temporal_context", "")
-        user_context = state.get("user_context", "")
-
-        if not memory_context:
-            prompt = _build_no_context_prompt(query, user_context)
-            answer = backend.generate(prompt, max_tokens=GENERATOR_MAX_TOKENS)
-        elif enable_fact_extraction and len(memory_context) >= 2:
-            # 两阶段生成：提取 → 回答
-            facts = _extract_facts(backend, query, memory_context)
-            prompt = _build_fact_prompt(
-                query, facts, temporal_context, user_context
-            )
-            answer = backend.generate(prompt, max_tokens=GENERATOR_MAX_TOKENS)
-            state["extracted_facts"] = facts
-        else:
-            # 降级：直接生成（1 条结果时不需要提取）
-            prompt = _build_context_prompt(
-                query, memory_context, temporal_context, user_context
-            )
-            answer = backend.generate(prompt, max_tokens=GENERATOR_MAX_TOKENS)
+        prompt = build_generator_prompt(state)
+        answer = backend.generate(prompt, max_tokens=GENERATOR_MAX_TOKENS)
 
         state["final_answer"] = answer
         state["latency_stats"]["generate_ms"] = (time.time() - t0) * 1000

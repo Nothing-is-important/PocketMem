@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 
 class AskRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000, description="用户查询")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(
+        default=None, description="多轮对话历史 [{'query': '...', 'answer': '...'}, ...]"
+    )
 
 
 class AskResponse(BaseModel):

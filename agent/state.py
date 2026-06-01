@@ -23,9 +23,12 @@ class AgentState(TypedDict):
     reflect_count: int
     final_answer: str
     latency_stats: Dict[str, float]
+    # 多轮对话支持
+    conversation_history: List[Dict[str, str]]  # [{"query": "...", "answer": "..."}, ...]
+    user_context: str  # 用户画像上下文，注入 generator prompt
 
 
-def create_initial_state(query: str) -> AgentState:
+def create_initial_state(query: str, conversation_history: list = None) -> AgentState:
     """创建初始状态。"""
     return AgentState(
         messages=[],
@@ -40,4 +43,6 @@ def create_initial_state(query: str) -> AgentState:
         reflect_count=0,
         final_answer="",
         latency_stats={},
+        conversation_history=conversation_history or [],
+        user_context="",
     )
