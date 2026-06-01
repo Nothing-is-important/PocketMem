@@ -362,6 +362,16 @@ body {
   background: rgba(88,166,255,0.03);
   font-style: italic;
 }
+/* 流式思考中的闪烁光标 */
+.think-content.streaming::after {
+  content: '▌';
+  animation: thinkBlink 0.8s infinite;
+  color: var(--accent);
+}
+@keyframes thinkBlink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
 
 /* ── Source Citations ── */
 .sources-block {
@@ -655,7 +665,7 @@ body {
             <span class="think-label">💭 思考过程</span>
             <span v-if="msg.thinkMs != null" class="think-time">{{ msg.thinkMs }}ms</span>
           </div>
-          <div v-if="msg._thinkOpen" class="think-content">{{ msg.thinking || msg._thinkingStream || '' }}</div>
+          <div v-if="msg._thinkOpen" :class="['think-content', { streaming: msg._thinkingStream && !msg.content }]">{{ msg.thinking || msg._thinkingStream || '' }}</div>
         </div>
         <!-- 来源引用 -->
         <div v-if="msg.sources && msg.sources.length" class="sources-block">
@@ -988,27 +998,43 @@ createApp({
 
               if (evt.event === 'generate_token') {
                 genText += (evt.data || '');
-                // Clear thinking indicator as soon as streaming output begins
                 this.thinkingMsg = null;
                 this._stopCycle();
                 let lm = this.messages[this.messages.length - 1];
                 if (!lm || lm.role !== 'assistant' || lm._done) {
-                  this.messages.push({ role: 'assistant', content: genText, _done: false, _thinkOpen: true });
+                  this.messages.push({ role: 'assistant', content: genText, _done: false, _thinkOpen: false });
                 } else {
+                  // 将流式思考内容固化
+                  if (lm._thinkingStream && !lm.thinking) {
+                    lm.thinking = lm._thinkingStream;
+                    lm._thinkingStream = '';
+                  }
                   lm.content = genText;
                 }
                 this.setNodeActive('generate');
                 this.updateProgress();
               }
-              if (evt.event === 'think' && evt.data) {
-                // 思考过程：存入当前或下一条 assistant 消息
+              if (evt.event === 'think_start') {
+                // 思考开始：清除动态提示，创建思考流
+                this.thinkingMsg = null;
+                this._stopCycle();
                 let lm = this.messages[this.messages.length - 1];
                 if (!lm || lm.role !== 'assistant' || lm._done) {
-                  this.messages.push({ role: 'assistant', content: '', thinking: evt.data, _done: false, _thinkOpen: true, thinkMs: evt.latency_ms });
+                  this.messages.push({ role: 'assistant', content: '', _thinkingStream: '', _done: false, _thinkOpen: true, thinkMs: evt.latency_ms });
                 } else {
-                  lm.thinking = (lm.thinking || '') + evt.data;
+                  lm._thinkingStream = '';
+                  lm._thinkOpen = true;
                   lm.thinkMs = evt.latency_ms;
                 }
+              }
+              if (evt.event === 'think_token' && evt.data) {
+                // 流式追加思考内容
+                let lm = this.messages[this.messages.length - 1];
+                if (lm && lm.role === 'assistant') {
+                  lm._thinkingStream = (lm._thinkingStream || '') + evt.data;
+                }
+                this.setNodeActive('generate');
+                this.updateProgress();
               }
               if (evt.event === 'sources' && evt.data) {
                 let lm = this.messages[this.messages.length - 1];
@@ -1089,8 +1115,9 @@ createApp({
           this.setNodeDone('judge');
           this.setNodeActive('generate');
           break;
-        case 'think':
-          // 思考过程已通过 think_token 事件处理
+        case 'think_start':
+        case 'think_token':
+          // 思考流式已通过 think_start/think_token 事件处理
           break;
         case 'generate':
           break;

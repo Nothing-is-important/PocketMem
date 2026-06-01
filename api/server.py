@@ -201,23 +201,33 @@ async def ask_stream(req: AskRequest, request: Request):
                     }})}
                     await asyncio.sleep(0.3)
                 elif node_name == "generate":
-                    # 思考模式：从 state 读取已生成的思考和回答
+                    # 思考模式：流式推送思考过程 + 逐字推送回答
                     backend = getattr(request.app.state, "backend", None)
                     latency_stats = node_state.get("latency_stats", {})
-
-                    # 发送思考过程
                     thinking = node_state.get("_thinking", "")
+                    final_answer = node_state.get("final_answer", "")
+
+                    # 先推送思考开始标记
                     if thinking:
                         yield {"data": json.dumps({
-                            "event": "think",
-                            "data": thinking,
+                            "event": "think_start",
+                            "data": "",
+                            "latency_ms": latency_stats.get("generate_ms", 0),
                         })}
+                        await asyncio.sleep(0.05)
+
+                        # 逐字流式推送思考过程
+                        chunk_size = 2
+                        for i in range(0, len(thinking), chunk_size):
+                            yield {"data": json.dumps({
+                                "event": "think_token",
+                                "data": thinking[i:i + chunk_size],
+                            })}
+                            await asyncio.sleep(0.015)
                         await asyncio.sleep(0.1)
 
                     # 逐字流式推送回答
-                    final_answer = node_state.get("final_answer", "")
                     if final_answer:
-                        # 按字符分块模拟流式输出
                         chunk_size = 3
                         for i in range(0, len(final_answer), chunk_size):
                             yield {"data": json.dumps({
