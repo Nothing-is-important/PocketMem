@@ -251,6 +251,10 @@ class LocalSimulateBackend(InferenceBackend):
         inputs = self._llm_tokenizer(text, return_tensors="pt").to(self.device)
         seq_len = inputs["input_ids"].shape[1]
 
+        # eos_token_id 可能是 list（Qwen3: [151645, 151643]），pad 需单值
+        eos_ids = self._llm_tokenizer.eos_token_id
+        pad_id = eos_ids if isinstance(eos_ids, int) else (eos_ids[0] if isinstance(eos_ids, list) else 151645)
+
         # 思考模式推荐参数：temperature=0.6, top_p=0.95, top_k=20
         with torch.no_grad():
             outputs = self._llm_model.generate(
@@ -260,18 +264,23 @@ class LocalSimulateBackend(InferenceBackend):
                 temperature=0.6,
                 top_p=0.95,
                 top_k=20,
-                eos_token_id=self._llm_tokenizer.eos_token_id,
-                pad_token_id=self._llm_tokenizer.eos_token_id,
+                eos_token_id=eos_ids,
+                pad_token_id=pad_id,
             )
 
         # 提取新生成的 token IDs
         output_ids = outputs[0][seq_len:].tolist()
 
+        logger.info(
+            "GenerateThinking: generated %d new tokens, seq_len=%d",
+            len(output_ids), seq_len
+        )
+
         # 在 token 151668 (</think>) 处分隔思考和回答
         try:
             think_end = len(output_ids) - output_ids[::-1].index(151668)
         except ValueError:
-            think_end = 0
+            think_end = 0  # 无 </think> 标记，全部视为回答
 
         thinking_text = self._llm_tokenizer.decode(
             output_ids[:think_end], skip_special_tokens=True

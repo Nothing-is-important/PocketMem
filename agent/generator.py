@@ -17,6 +17,64 @@ from config.prompts import prompts
 GENERATOR_MAX_TOKENS = 512
 
 
+def build_thinking_messages(state: AgentState) -> list:
+    """构建 Qwen3 思考模式的 chat messages。
+
+    Returns:
+        [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}]
+    """
+    query = state["query"]
+    memory_context = state.get("memory_context", [])
+    temporal_context = state.get("temporal_context", "")
+    conv_history = state.get("conversation_history", [])
+
+    # System prompt：简洁，与思考模式配合
+    system_prompt = (
+        "你是一个个人记忆助手。先分析提供的记忆片段，再给出回答。"
+        "只基于记忆片段回答，不要编造。找不到就说不知道。"
+        "回答末尾注明来源日期和参与人。回答简洁。"
+    )
+
+    # 用户消息：拼接记忆上下文 + 查询
+    user_parts = []
+    if temporal_context and temporal_context != "无时间信息":
+        user_parts.append(f"时间范围：{temporal_context}")
+
+    if memory_context:
+        user_parts.append("相关记忆片段：")
+        for i, item in enumerate(memory_context[:5]):
+            content = item.get("content", "")[:300]
+            meta = item.get("metadata", {})
+            ts = meta.get("timestamp", "")[:10] if meta.get("timestamp") else ""
+            participants = meta.get("participants", "")
+            if isinstance(participants, list):
+                participants = ", ".join(participants)
+            label = f"[{i+1}]"
+            if ts:
+                label += f" {ts}"
+            if participants:
+                label += f" ({participants})"
+            user_parts.append(f"{label}\n{content}")
+    else:
+        user_parts.append("（未找到相关记忆片段）")
+
+    # 多轮对话历史
+    if conv_history:
+        recent = conv_history[-2:]
+        user_parts.append("\n之前的对话：")
+        for turn in recent:
+            user_parts.append(f"用户：{turn.get('query', '')}")
+            user_parts.append(f"助手：{turn.get('answer', '')}")
+
+    user_parts.append(f"\n用户查询：{query}")
+    user_message = "\n".join(user_parts)
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+
+
 def build_generator_prompt(state: AgentState) -> str:
     """从 AgentState 构建最终生成 prompt（流式和非流式共用）。"""
     query = state["query"]
@@ -108,6 +166,11 @@ def create_generator_node(backend, enable_fact_extraction: bool = True):
             thinking_text, answer_text = backend.generate_with_thinking(
                 messages, max_tokens=GENERATOR_MAX_TOKENS
             )
+            # 思考模式返回空 → 降级到标准生成
+            if not answer_text.strip() and not thinking_text.strip():
+                prompt = build_generator_prompt(state)
+                answer_text = backend.generate(prompt, max_tokens=GENERATOR_MAX_TOKENS)
+                thinking_text = ""
             state["final_answer"] = answer_text.strip() or thinking_text.strip()
             state["_thinking"] = thinking_text.strip()
         else:

@@ -1016,6 +1016,11 @@ createApp({
                   lm.sources = evt.data;
                 }
               }
+              if (evt.event === 'error') {
+                // 显示后端错误，不要静默吞掉
+                this.messages.push({ role: 'assistant', content: '生成失败: ' + (evt.data || '未知错误') });
+                this._stopCycle();
+              }
               if (evt.event === 'generate' && evt.data) {
                 let lm = this.messages[this.messages.length - 1];
                 if (lm && lm.role === 'assistant') lm._done = true;
