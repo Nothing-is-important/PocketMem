@@ -1028,9 +1028,17 @@ createApp({
                 }
               }
               if (evt.event === 'think_token' && evt.data) {
-                // 流式追加思考内容
+                // 流式追加思考内容（首个 token 自动初始化）
                 let lm = this.messages[this.messages.length - 1];
-                if (lm && lm.role === 'assistant') {
+                if (!lm || lm.role !== 'assistant' || lm._done) {
+                  this.messages.push({ role: 'assistant', content: '', _thinkingStream: evt.data, _done: false, _thinkOpen: true });
+                } else if (!lm._thinkingStream && !lm.thinking) {
+                  // 首个 think_token → 初始化流式思考
+                  lm._thinkingStream = evt.data;
+                  lm._thinkOpen = true;
+                  this.thinkingMsg = null;
+                  this._stopCycle();
+                } else {
                   lm._thinkingStream = (lm._thinkingStream || '') + evt.data;
                 }
                 this.setNodeActive('generate');
