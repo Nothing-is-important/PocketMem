@@ -148,7 +148,7 @@ class LocalSimulateBackend(InferenceBackend):
             outputs = self._llm_model.generate(
                 **inputs,
                 max_new_tokens=max_tokens,
-                do_sample=True,
+                do_sample=False,  # 1.5B 小模型采样模式输出失控，保持贪心解码
                 temperature=0.7,
                 top_p=0.8,
                 top_k=20,
@@ -201,7 +201,7 @@ class LocalSimulateBackend(InferenceBackend):
         generation_kwargs = dict(
             **inputs,
             max_new_tokens=max_tokens,
-            do_sample=True,
+            do_sample=False,  # 1.5B 小模型采样模式输出失控，保持贪心解码
             temperature=0.7,
             top_p=0.8,
             top_k=20,
@@ -271,7 +271,7 @@ class LocalSimulateBackend(InferenceBackend):
             generated_ids = self._llm_model.generate(
                 **inputs,
                 max_new_tokens=max_tokens,
-                do_sample=True,
+                do_sample=False,  # 1.5B 小模型采样模式输出失控，保持贪心解码
                 temperature=0.7,
                 top_p=0.8,
                 top_k=20,

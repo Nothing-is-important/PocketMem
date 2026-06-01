@@ -223,7 +223,11 @@ class SourceManager:
         """获取数据源统计信息。"""
         sources_info = []
         for file_hash, info in self._indexed_files.items():
-            name = Path(info.get("filepath", info.get("filename", ""))).name or info.get("filename", "")
+            # 优先用存储的 filename，其次从 filepath 提取，最后用 hash 前缀
+            name = info.get("filename", "")
+            if not name:
+                fp = info.get("filepath", "")
+                name = Path(fp).name if fp else f"file_{file_hash[:8]}"
             sources_info.append({
                 "name": name,
                 "type": info.get("type", "unknown"),
