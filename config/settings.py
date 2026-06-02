@@ -7,17 +7,57 @@ from pathlib import Path
 
 
 def _find_model(model_dirs: list[str], hf_name: str) -> str:
-    """自动查找模型路径：本地目录 > HF_HOME 缓存 > HuggingFace 在线。
+    """自动查找模型路径：本地目录 > ModelScope下载 > HF_HOME 缓存 > HuggingFace 在线。
 
     优先级：
     1. 环境变量 POCKET_EMBEDDING_MODEL / POCKET_LLM_MODEL
     2. 常见本地路径
-    3. HuggingFace 模型名（在线下载）
+    3. ModelScope 自动下载（国内网络友好）
+    4. HuggingFace 模型名（在线下载，需要科学上网）
     """
     for d in model_dirs:
         if os.path.isdir(d):
             return d
+
+    # ModelScope 下载：国内用户友好，不需要科学上网
+    ms_dir = _download_from_modelscope(hf_name)
+    if ms_dir:
+        return ms_dir
+
     return hf_name
+
+
+def _download_from_modelscope(hf_name: str) -> str:
+    """从 ModelScope 下载模型到本地缓存目录。
+
+    Args:
+        hf_name: HuggingFace 模型名，如 "Qwen/Qwen3-4B"
+
+    Returns:
+        本地模型目录路径，失败返回空字符串
+    """
+    try:
+        from modelscope import snapshot_download
+    except ImportError:
+        return ""  # modelscope 未安装，静默跳过
+
+    # 将 HF 风格路径转为 ModelScope 风格
+    ms_model_id = hf_name.replace("/", "/", 1)  # 格式相同，直接使用
+    cache_dir = os.path.join(str(Path.home()), ".cache", "modelscope", "hub")
+
+    try:
+        local_dir = snapshot_download(
+            ms_model_id,
+            cache_dir=cache_dir,
+            revision="master",
+        )
+        if local_dir and os.path.isdir(local_dir):
+            print(f"[ModelScope] 模型已下载: {local_dir}")
+            return local_dir
+    except Exception as e:
+        print(f"[ModelScope] 下载失败 ({hf_name}): {e}")
+
+    return ""
 
 
 def _model_search_paths(local_name: str) -> list[str]:
@@ -95,6 +135,11 @@ class Settings:
     # ── 服务 ──
     server_host: str = os.getenv("POCKET_HOST", "0.0.0.0")
     server_port: int = int(os.getenv("POCKET_PORT", "8000"))
+
+    # ── vLLM ──
+    vllm_base_url: str = os.getenv(
+        "POCKET_VLLM_URL", "http://localhost:8001/v1"
+    )
 
     # ── Agent ──
     max_reflect_iterations: int = 1

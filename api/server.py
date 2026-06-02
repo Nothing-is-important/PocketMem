@@ -215,24 +215,39 @@ async def ask_stream(req: AskRequest, request: Request):
 
                 if backend and hasattr(backend, 'generate_with_thinking'):
                     from agent.generator import build_thinking_messages
+                    import inspect
                     messages = build_thinking_messages(gen_state)
 
                     first_think = True
                     thinking_text = ""
                     answer_text = ""
-                    for event_type, text in backend.generate_with_thinking(
-                        messages, max_tokens=2048
-                    ):
-                        if event_type == "think":
-                            if first_think:
-                                yield {"data": json.dumps({"event": "think_start", "data": ""})}
-                                first_think = False
-                            thinking_text += text
-                            yield {"data": json.dumps({"event": "think_token", "data": text})}
-                        elif event_type == "answer":
-                            answer_text += text
-                            yield {"data": json.dumps({"event": "generate_token", "data": text})}
-                        await asyncio.sleep(0.005)
+
+                    gen_result = backend.generate_with_thinking(messages, max_tokens=2048)
+                    # vLLM 后端返回 async generator，本地后端返回 generator
+                    if inspect.isasyncgen(gen_result):
+                        async for event_type, text in gen_result:
+                            if event_type == "think":
+                                if first_think:
+                                    yield {"data": json.dumps({"event": "think_start", "data": ""})}
+                                    first_think = False
+                                thinking_text += text
+                                yield {"data": json.dumps({"event": "think_token", "data": text})}
+                            elif event_type == "answer":
+                                answer_text += text
+                                yield {"data": json.dumps({"event": "generate_token", "data": text})}
+                            await asyncio.sleep(0.005)
+                    else:
+                        for event_type, text in gen_result:
+                            if event_type == "think":
+                                if first_think:
+                                    yield {"data": json.dumps({"event": "think_start", "data": ""})}
+                                    first_think = False
+                                thinking_text += text
+                                yield {"data": json.dumps({"event": "think_token", "data": text})}
+                            elif event_type == "answer":
+                                answer_text += text
+                                yield {"data": json.dumps({"event": "generate_token", "data": text})}
+                            await asyncio.sleep(0.005)
 
                     # 更新 state 用于 hook
                     gen_state["final_answer"] = answer_text.strip() or thinking_text.strip()

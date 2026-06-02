@@ -21,13 +21,18 @@ def setup():
     # 1. 创建推理后端
     from backend import create_backend
 
-    backend = create_backend(
-        "local_simulate",
+    backend_kwargs = dict(
         embedding_model_name=settings.embedding_model,
         llm_model_name=settings.llm_model,
         device=settings.device,
         chunk_size=settings.chunk_size,
     )
+    # vLLM 后端需要额外参数
+    if settings.backend_type == "vllm":
+        backend_kwargs["base_url"] = settings.vllm_base_url
+        backend_kwargs["model_name"] = settings.llm_model
+
+    backend = create_backend(settings.backend_type, **backend_kwargs)
 
     # 2. 创建向量库和检索器
     from rag.bm25_retriever import BM25Retriever
@@ -210,7 +215,14 @@ def main():
     parser = argparse.ArgumentParser(description="PocketMemory 演示")
     parser.add_argument("--once", action="store_true", help="运行预设查询并退出")
     parser.add_argument("--serve", action="store_true", help="启动 FastAPI 服务")
+    parser.add_argument("--backend", default=None, choices=["local_simulate", "vllm"],
+                        help="推理后端（默认: POCKET_BACKEND 环境变量或 local_simulate）")
     args = parser.parse_args()
+
+    # CLI 参数覆盖环境变量
+    if args.backend:
+        import os
+        os.environ["POCKET_BACKEND"] = args.backend
 
     print("初始化 PocketMemory...")
     components = setup()

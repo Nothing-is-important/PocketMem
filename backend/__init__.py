@@ -1,12 +1,15 @@
 """InferenceBackend 抽象层 —— 统一端侧推理接口。
 
-设计理念：抽象层将 LLM/Embedding 推理与业务逻辑解耦，
-PC 开发用 LocalSimulateBackend，部署时切换到 MobileBackend。
+支持后端：
+- local_simulate: transformers 本地推理（开发调试）
+- vllm: vLLM OpenAI 兼容 API（生产，5-10x 加速）
+- mobile_android/mobile_ios: 手机部署骨架
 """
 
 from .base import InferenceBackend
 from .local_simulate import LocalSimulateBackend
 from .mobile_backend import MobileBackend
+from .vllm_backend import VLLMBackend
 
 
 def create_backend(
@@ -15,6 +18,7 @@ def create_backend(
     """工厂函数：根据类型字符串创建推理后端实例。"""
     backends = {
         "local_simulate": LocalSimulateBackend,
+        "vllm": VLLMBackend,
         "mobile_android": MobileBackend,
         "mobile_ios": MobileBackend,
     }
@@ -30,6 +34,7 @@ def create_backend(
 __all__ = [
     "InferenceBackend",
     "LocalSimulateBackend",
+    "VLLMBackend",
     "MobileBackend",
     "create_backend",
 ]
