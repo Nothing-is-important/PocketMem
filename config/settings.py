@@ -97,8 +97,8 @@ class Settings:
     llm_model: str = os.getenv(
         "POCKET_LLM_MODEL",
         _find_model(
-            _model_search_paths("Qwen3-4B"),
-            "Qwen/Qwen3-4B",
+            _model_search_paths("Qwen2.5-1.5B-Instruct"),
+            "Qwen/Qwen2.5-1.5B-Instruct",
         ),
     )
     chunk_size: int = int(os.getenv("POCKET_CHUNK_SIZE", "512"))

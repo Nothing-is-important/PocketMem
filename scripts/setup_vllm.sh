@@ -17,11 +17,15 @@ python3 -m venv ~/vllm-env
 echo "虚拟环境: ~/vllm-env"
 
 echo ""
-echo "=== Step 3: 安装 vLLM（约 3GB，需要 5-15 分钟）==="
+echo "=== Step 3: 安装 PyTorch CUDA 版（先装，避免 vLLM 拉错版本）==="
+uv pip install torch --python ~/vllm-env/bin/python --index-url https://download.pytorch.org/whl/cu126
+
+echo ""
+echo "=== Step 4: 安装 vLLM（约 3GB，需要 5-15 分钟）==="
 uv pip install vllm --python ~/vllm-env/bin/python
 
 echo ""
-echo "=== Step 4: 验证安装 ==="
+echo "=== Step 5: 验证安装 ==="
 ~/vllm-env/bin/python -c "
 import torch
 print(f'PyTorch: {torch.__version__}')

@@ -105,6 +105,12 @@ class LocalSimulateBackend(InferenceBackend):
 
         self._llm_model.eval()
 
+        # Qwen3 检测：只有 Qwen3 支持思考模式
+        model_type = getattr(self._llm_model.config, "model_type", "")
+        self._supports_thinking = "qwen3" in str(model_type).lower()
+        if not self._supports_thinking:
+            logger.info("模型不是 Qwen3，思考模式已禁用")
+
         # 延迟统计
         self._last_embed_latency_ms = 0.0
         self._last_generate_latency_ms = 0.0
@@ -233,14 +239,16 @@ class LocalSimulateBackend(InferenceBackend):
     def generate_with_thinking(self, messages: list, max_tokens: int = 512):
         """Qwen3 思考模式生成 —— 真正的 token-by-token 流式。
 
-        使用 TextIteratorStreamer 逐 token 获取输出，
-        保留 special tokens（</think> token 151668），
-        在流中实时检测并分隔思考过程和最终回答。
-
-        Yields:
-            ("think", str): 思考过程文本片段
-            ("answer", str): 最终回答文本片段
+        非 Qwen3 模型不支持思考模式，自动降级为标准流式生成。
         """
+        # 非 Qwen3 模型：降级为标准生成
+        if not self._supports_thinking:
+            from agent.generator import build_thinking_messages
+            prompt = self._build_prompt_from_messages(messages)
+            for text_chunk in self.generate_stream(prompt, max_tokens):
+                yield ("answer", text_chunk)
+            return
+
         from threading import Thread
 
         try:
@@ -327,45 +335,19 @@ class LocalSimulateBackend(InferenceBackend):
         thread.join()
         self._last_generate_latency_ms = (time.time() - t0) * 1000
         logger.info(
-            "GenerateThinking: latency=%.1fms", self._last_generate_latency_ms
+            "GenerateStreamThinking: latency=%.1fms", self._last_generate_latency_ms
         )
 
-    def _generate_with_thinking_sync(self, messages: list, max_tokens: int = 512):
-        """一次性生成（降级方案）。"""
-        t0 = time.time()
-        text = self._llm_tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
-            enable_thinking=True,
-        )
-        inputs = self._llm_tokenizer(text, return_tensors="pt").to(self.device)
-        seq_len = inputs["input_ids"].shape[1]
+    def _build_prompt_from_messages(self, messages: list) -> str:
+        """Build standard prompt string from chat messages (fallback)."""
+        parts = []
+        for msg in messages:
+            content = msg.get("content", "")
+            parts.append(content)
+        return "\n\n".join(parts)
 
-        eos_ids = self._llm_tokenizer.eos_token_id
-        pad_id = eos_ids if isinstance(eos_ids, int) else (eos_ids[0] if isinstance(eos_ids, list) else 151645)
-
-        gen_config = GenerationConfig(
-            max_new_tokens=max_tokens, do_sample=True,
-            temperature=0.6, top_p=0.95, top_k=20,
-            eos_token_id=eos_ids, pad_token_id=pad_id,
-        )
-        with torch.no_grad():
-            outputs = self._llm_model.generate(**inputs, generation_config=gen_config)
-
-        output_ids = outputs[0][seq_len:].tolist()
-        try:
-            think_end = len(output_ids) - output_ids[::-1].index(151668)
-        except ValueError:
-            think_end = 0
-
-        thinking_text = self._llm_tokenizer.decode(
-            output_ids[:think_end], skip_special_tokens=True
-        ).strip()
-        answer_text = self._llm_tokenizer.decode(
-            output_ids[think_end:], skip_special_tokens=True
-        ).strip()
-        self._last_generate_latency_ms = (time.time() - t0) * 1000
-        return thinking_text, answer_text
-
+    # ═══════════════════════════════════════════════════════════════
+    # 多模态生成（图片 + 文本 → 文本）
     # ═══════════════════════════════════════════════════════════════
     # 多模态生成（图片 + 文本 → 文本）
     # ═══════════════════════════════════════════════════════════════
