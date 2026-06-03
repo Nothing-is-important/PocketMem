@@ -302,33 +302,42 @@ class LocalSimulateBackend(InferenceBackend):
         in_thinking = True
         buffer = ""
         THINK_END = "</think>"
+        CHATML_TOKENS = ("<|im_end|>", "<|im_start|>", "<|endoftext|>")
+
+        def _clean(text: str) -> str:
+            """过滤 ChatML 特殊 token。"""
+            for tok in CHATML_TOKENS:
+                text = text.replace(tok, "")
+            return text
 
         for new_text in streamer:
             buffer += new_text
 
             if in_thinking and THINK_END in buffer:
-                # </think> 出现 → 分隔思考与回答
                 idx = buffer.index(THINK_END)
-                think_part = buffer[:idx]
+                think_part = _clean(buffer[:idx])
                 if think_part.strip():
                     yield ("think", think_part)
                 in_thinking = False
-                buffer = buffer[idx + len(THINK_END):]
+                buffer = _clean(buffer[idx + len(THINK_END):])
                 if buffer.strip():
                     yield ("answer", buffer)
                 buffer = ""
             elif in_thinking:
-                # 仍在思考阶段 → 流式 yield 思考文本
                 if buffer.strip():
-                    yield ("think", buffer)
+                    cleaned = _clean(buffer)
+                    if cleaned.strip():
+                        yield ("think", cleaned)
                     buffer = ""
             else:
-                # 回答阶段 → 流式 yield 回答文本
                 if buffer.strip():
-                    yield ("answer", buffer)
+                    cleaned = _clean(buffer)
+                    if cleaned.strip():
+                        yield ("answer", cleaned)
                     buffer = ""
 
         # 刷新剩余 buffer
+        buffer = _clean(buffer)
         if buffer.strip():
             yield ("answer" if not in_thinking else "think", buffer)
 
