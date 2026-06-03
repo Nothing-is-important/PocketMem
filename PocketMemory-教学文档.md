@@ -1258,6 +1258,98 @@ HuggingFace 在国内经常超时。项目在 `config/settings.py` 的 `_find_mo
 
 ---
 
+## 第 2.9 节：v1.3 新特性——vLLM 加速 + 流式优化 + 模型降级 🟡 进阶 🆕
+
+> 🎯 **本节目标：** 理解推理后端切换、流式架构优化、多模型兼容的设计思想。
+> 🔴 **面试必问：** "为什么要做推理后端抽象？vLLM 和 transformers 各有什么优势？"
+
+### 2.9.1 vLLM 推理后端——5-10x 加速
+
+#### 为什么需要 vLLM？
+
+`transformers.AutoModelForCausalLM.generate()` 是贪心解码，没有任何推理优化。vLLM 通过 PagedAttention 管理 KV Cache、CUDA Graph 加速、连续批处理，将推理速度提升 5-10 倍。
+
+#### 架构设计
+
+```
+WSL2: vLLM Server :8001 (GPU 推理，PagedAttention)
+         ↑ HTTP OpenAI 兼容 API
+Windows: FastAPI → VLLMBackend (AsyncOpenAI 客户端)
+                   ├─ generate_with_thinking() → async SSE 流式
+                   └─ embed() → 本地 sentence-transformers
+```
+
+**核心代码：** `backend/vllm_backend.py`
+- `VLLMBackend` 继承 `InferenceBackend`
+- `generate_with_thinking()`：async generator，通过 `chat_template_kwargs={"enable_thinking": True}` 启用思考模式
+- `generate()`：同步降级接口，Router 等非流式场景使用
+- `embed()`：继续使用本地 sentence-transformers（100MB，不占 vLLM 资源）
+
+**启动方式：**
+```bash
+# WSL2: vLLM Server
+~/vllm-env/bin/vllm serve /mnt/f/Models/Qwen3-4B --port 8001
+
+# Windows: FastAPI
+uv run python scripts/run_demo.py --serve --backend vllm
+```
+
+**面试讲法：** "推理后端抽象层的价值在这里体现——Agent 代码完全不用改，通过 `--backend vllm` 就能切换到 5-10x 加速。vLLM 的 PagedAttention 在 8GB 显存下也能高效运行 4B 模型。如果是 1.7B 模型，vLLM 加速后思考和回答几乎同时完成。"
+
+### 2.9.2 真正的逐 token 流式——TextIteratorStreamer
+
+#### 之前的问题（v1.2）
+
+模型先生成全部 token，然后在 SSE 中按字符模拟分块流式——不是真正的流式。
+
+#### v1.3 修复
+
+`generate_with_thinking()` 改用 `TextIteratorStreamer` + `skip_special_tokens=False`：
+- 模型生成一个 token → Streamer 立即拿到 → 检测到 `</think>`（token 151668）→ 实时切换 think/answer 模式 → SSE 立即推送
+- 每个 token 都是模型实时输出的，不是事后切割
+
+**关键技巧：** `skip_special_tokens=False` 保留了 `</think>` 作为普通文本，用于实时分隔。副作用是 `<|im_end|>` 也被保留——在输出前通过 `_clean()` 函数过滤。
+
+### 2.9.3 消除重复 LLM 调用——break astream
+
+#### 之前的问题（v1.2）
+
+Judge 完成后，SSE handler 要等 LangGraph 的 generate 节点跑完才收到事件，然后才开始流式输出。中间有大段空白。
+
+#### v1.3 修复
+
+Judge 事件后 `break` 退出 `astream` 循环，SSE handler 直接调用 `generate_with_thinking()`：
+- 只调用一次 LLM（之前是两次：生成节点 + SSE handler）
+- Judge 完成后立即开始流式，无空白等待
+- 手动触发 `post_generate` hook 保证用户画像正常记录
+
+### 2.9.4 多模型兼容——自动检测与降级
+
+`LocalSimulateBackend.__init__()` 检测 `model_type`：
+- `qwen3` → 启用思考模式（`_supports_thinking = True`）
+- 非 qwen3（如 Qwen2.5）→ 自动禁用，降级为标准流式生成
+- 无需手动配置，切换模型自动适配
+
+**当前支持的模型路径：**
+| 模型 | 大小 | 思考模式 | 推荐场景 |
+|------|------|---------|---------|
+| Qwen3-1.7B | 3.8GB | ✅ | **当前默认**，CPU 可运行 |
+| Qwen3-4B | 8GB | ✅ | GPU 推荐，需 vLLM |
+| Qwen2.5-1.5B | 3GB | ❌ | 快速开发验证 |
+
+### 2.9.5 架构演进总结
+
+```
+v1.0: 1.5B 无思考 → 两阶段生成 → 模拟流式 → 12次LLM调用
+v1.1: 组合评分替代验证 → Hook系统 → 用户画像 → 2次LLM调用
+v1.2: Qwen3-4B思考模式 → 动态推荐 → 多轮对话 → 思考面板
+v1.3: 真正逐token流式 → vLLM加速 → 多模型兼容 → 1次LLM调用
+```
+
+**面试讲法：** "这个项目的每个版本都是针对一个具体问题的工程优化，而不是功能堆砌。v1.2 加思考模式但延迟翻倍，v1.3 就用真正的流式+break astream 把延迟降回来。面试官看到的是'我有发现问题并解决问题的能力'，而不只是'我加了这些功能'。"
+
+---
+
 ## 第 3 节：环境搭建——从零开始
 
 ### 前置条件
