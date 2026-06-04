@@ -177,6 +177,24 @@ body {
 }
 .sidebar-status .ok { color: var(--green); }
 .sidebar-status .err { color: var(--red); }
+/* 导入进度条 */
+.import-progress { margin-top: 4px; }
+.import-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+.import-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.import-text {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
 .sidebar-list {
   flex: 1;
   overflow-y: auto;
@@ -615,6 +633,13 @@ body {
     <div class="sidebar-status">
       <span v-if="importResult" :class="importResult.includes('失败') ? 'err' : 'ok'">{{ importResult }}</span>
       <span v-else-if="scanResult" :class="scanResult.error ? 'err' : 'ok'">{{ scanResult.error || scanResult.msg }}</span>
+      <!-- 微信导入进度 -->
+      <div v-if="importing && importProgress.total" class="import-progress">
+        <div class="import-bar">
+          <div class="import-bar-fill" :style="{ width: (importProgress.total ? importProgress.done / importProgress.total * 100 : 0) + '%' }"></div>
+        </div>
+        <div class="import-text">{{ importProgress.stage }} ({{ importProgress.done }}/{{ importProgress.total }})</div>
+      </div>
     </div>
     <div class="sidebar-list">
       <template v-if="sources.length">
@@ -752,6 +777,7 @@ createApp({
       scanning: false, scanResult: null,
       wechatStatus: { running: false, wxid: null, hint: '', can_import: false },
       importing: false, importResult: '',
+      importProgress: { files: [], current: '', stage: '', done: 0, total: 0 },
       thinkingMsg: null,
 
       // ── Suggestion refresh tracking ──
@@ -901,14 +927,59 @@ createApp({
     async importWechat() {
       this.importing = true;
       this.importResult = '';
-      this.scanResult = null;
+      this.importProgress = { files: [], current: '', stage: '', done: 0, total: 0 };
       try {
-        const r = await fetch('/wechat/import', { method: 'POST' });
-        const d = await r.json();
-        this.importResult = d.status === 'ok'
-          ? (d.chunks ? `已导入 ${d.chunks} 条消息片段` : '导入完成')
-          : (d.error || '导入失败');
-        if (d.status === 'ok') { this.loadSources(); this.loadSuggestions(); }
+        const response = await fetch('/wechat/import', { method: 'POST' });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const data = line.substring(5).trim();
+            if (!data) continue;
+            try {
+              const evt = JSON.parse(data);
+              switch (evt.event) {
+                case 'discover':
+                  this.importProgress.files = evt.files || [];
+                  this.importProgress.total = evt.count || 0;
+                  this.importProgress.stage = `发现 ${evt.count} 个文件`;
+                  break;
+                case 'file_start':
+                  this.importProgress.current = evt.file;
+                  this.importProgress.stage = '解析中...';
+                  break;
+                case 'parse_done':
+                  this.importProgress.stage = `解析完成 (${evt.messages} 条消息)`;
+                  break;
+                case 'index_done':
+                  this.importProgress.stage = `索引完成 (${evt.chunks} 个片段)`;
+                  break;
+                case 'file_done':
+                  this.importProgress.done++;
+                  this.importProgress.stage = '完成';
+                  break;
+                case 'file_error':
+                  this.importProgress.stage = '失败';
+                  this.importResult = `${evt.file}: ${evt.error}`;
+                  break;
+                case 'complete':
+                  this.importResult = evt.message || '导入完成';
+                  this.importProgress.stage = '全部完成';
+                  this.loadSources();
+                  this.loadSuggestions();
+                  break;
+              }
+            } catch { /* skip malformed JSON */ }
+          }
+        }
       } catch (e) {
         this.importResult = '失败: ' + e.message;
       } finally {

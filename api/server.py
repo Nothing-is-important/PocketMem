@@ -690,14 +690,31 @@ async def wechat_status():
 
 
 @app.post("/wechat/import")
-async def wechat_import():
-    """导入微信消息数据库（需要先解密）。
+async def wechat_import_stream(request: Request):
+    """导入微信聊天记录 —— SSE 流式进度报告。
 
-    当前状态：数据库解密功能正在开发中。
-    微信 MSG0.db 使用 SQLCipher 4 加密，需要从进程内存提取密钥。
+    扫描 data/raw/ 目录中的微信导出 .txt 文件，
+    通过 SSE 实时报告每个文件的解析和索引进度。
     """
-    return {
-        "status": "pending",
-        "chunks": 0,
-        "hint": "数据库解密功能开发中。需要 pycryptodome + pymem 从微信进程内存提取密钥。参考 .opencode/skills/wechat-db-decrypt.skill.md",
-    }
+    source_mgr = getattr(request.app.state, "source_manager", None)
+    pipeline = getattr(request.app.state, "pipeline", None)
+    indexer = getattr(request.app.state, "indexer", None)
+
+    if source_mgr is None or pipeline is None or indexer is None:
+        raise HTTPException(status_code=503, detail="Ingestion components not initialized")
+
+    async def event_generator():
+        from data_ingestion.wechat_importer import WechatImporter
+        import asyncio
+
+        importer = WechatImporter(pipeline=pipeline, indexer=indexer)
+        watch_dir = source_mgr.watch_dir()
+
+        for progress in importer.import_from_directory(watch_dir):
+            yield {"data": json.dumps(progress)}
+            await asyncio.sleep(0.05)
+
+        # 导入完成后刷新来源列表缓存
+        invalidate_suggestion_cache()
+
+    return EventSourceResponse(event_generator())
