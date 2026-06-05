@@ -28,20 +28,20 @@ def extract_key_elevated() -> str:
             pass
 
     # Write extraction script
-    script_code = f'''
-import sys, os
-sys.path.insert(0, r"{project_root}")
-try:
-    from data_ingestion.wechat_key import extract_key_from_memory, _scan_hex_key_in_memory
-    key = extract_key_from_memory()
-    if not key:
-        key = _scan_hex_key_in_memory()
-    with open(r"{result_file}", "w") as f:
-        f.write(key if key else "NONE")
-except Exception as e:
-    with open(r"{result_file}", "w") as f:
-        f.write(f"ERROR:{e}")
-'''
+    script_code = (
+        'import sys, os\n'
+        f'sys.path.insert(0, r"{project_root}")\n'
+        'try:\n'
+        '    from data_ingestion.wechat_key import extract_key_from_memory, _scan_hex_key_in_memory\n'
+        '    key = extract_key_from_memory()\n'
+        '    if not key:\n'
+        '        key = _scan_hex_key_in_memory()\n'
+        f'    with open(r"{result_file}", "w") as f:\n'
+        '        f.write(key if key else "NONE")\n'
+        'except Exception as e:\n'
+        f'    with open(r"{result_file}", "w") as f:\n'
+        '        f.write("ERROR:" + str(e))\n'
+    )
     with open(script_file, "w", encoding="utf-8") as f:
         f.write(script_code)
 
@@ -53,13 +53,13 @@ except Exception as e:
             sys.executable,            # python.exe
             f'"{script_file}"',        # args
             None,                      # working dir
-            0,                         # SW_HIDE
+            1,                         # SW_SHOWNORMAL - show window (UAC visible)
         )
         if ret <= 32:  # ShellExecute failed
             return ""
 
-        # Wait for elevated process to finish (max 60s)
-        for _ in range(120):
+        # Wait for elevated process to finish (UAC dialog may take time)
+        for _ in range(300):  # Up to 150 seconds
             if os.path.exists(result_file):
                 time.sleep(0.3)
                 with open(result_file, "r") as f:
