@@ -61,46 +61,78 @@ def extract_key_from_memory() -> Optional[str]:
 
 
 def _get_wechatwin_base() -> tuple:
-    """获取 WeChatWin.dll 的基址和大小（不需要管理员）。
+    """获取 WeChatWin.dll 的基址和大小。
+
+    使用 psapi.EnumProcessModules（不需要管理员）。
 
     Returns:
         (base_address, size) 或 (None, None)
     """
-    try:
-        import psutil
-    except ImportError:
-        return None, None
+    import ctypes
+    from ctypes import wintypes
 
-    process_names = ["Weixin.exe", "WeChat.exe", "weixin.exe", "wechat.exe"]
+    psapi = ctypes.windll.psapi
+    kernel32 = ctypes.windll.kernel32
+
+    # 找微信进程
+    process_names = ["Weixin.exe", "WeChat.exe"]
     target_pid = None
-
-    for proc in psutil.process_iter(["pid", "name"]):
+    for name in process_names:
         try:
-            if proc.info["name"] and proc.info["name"].lower() in [n.lower() for n in process_names]:
-                target_pid = proc.info["pid"]
-                break
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            import pymem
+            pm = pymem.Pymem(name)
+            target_pid = pm.process_id
+            break
+        except Exception:
             continue
 
     if not target_pid:
         return None, None
 
-    try:
-        proc = psutil.Process(target_pid)
-        for mmap in proc.memory_maps():
-            if "WeChatWin.dll" in mmap.path:
-                # rss 是内存起始地址
-                addr = int(mmap.addr.split("-")[0], 16) if "-" in mmap.addr else 0
-                if addr:
-                    return addr, mmap.rss
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        pass
+    # OpenProcess with minimal rights
+    PROCESS_QUERY_INFORMATION = 0x0400
+    PROCESS_VM_READ = 0x0010
+    handle = kernel32.OpenProcess(
+        PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+        False, target_pid
+    )
+    if not handle:
+        return None, None
 
-    return None, None
+    try:
+        # Enumerate modules
+        hModules = (ctypes.c_void_p * 1024)()
+        cbNeeded = wintypes.DWORD()
+        if not psapi.EnumProcessModules(handle, ctypes.byref(hModules),
+                                         ctypes.sizeof(hModules), ctypes.byref(cbNeeded)):
+            return None, None
+
+        num_modules = cbNeeded.value // ctypes.sizeof(ctypes.c_void_p)
+        MODULE_NAME_LEN = 260
+        name_buffer = ctypes.create_unicode_buffer(MODULE_NAME_LEN)
+
+        for i in range(num_modules):
+            mod_handle = hModules[i]
+            if psapi.GetModuleFileNameExW(handle, mod_handle, name_buffer, MODULE_NAME_LEN):
+                mod_name = name_buffer.value.lower()
+                if "wechatwin.dll" in mod_name:
+                    # Get module info
+                    class MODULEINFO(ctypes.Structure):
+                        _fields_ = [("lpBaseOfDll", ctypes.c_void_p),
+                                    ("SizeOfImage", wintypes.DWORD),
+                                    ("EntryPoint", ctypes.c_void_p)]
+                    mod_info = MODULEINFO()
+                    if psapi.GetModuleInformation(handle, mod_handle,
+                                                   ctypes.byref(mod_info),
+                                                   ctypes.sizeof(mod_info)):
+                        return mod_info.lpBaseOfDll, mod_info.SizeOfImage
+        return None, None
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _read_process_memory(base: int, size: int, max_read: int = 50 * 1024 * 1024) -> bytes:
-    """读取进程内存（尝试多种方法）。
+    """读取进程内存。
 
     Args:
         base: 起始地址
@@ -112,52 +144,16 @@ def _read_process_memory(base: int, size: int, max_read: int = 50 * 1024 * 1024)
     """
     read_size = min(size, max_read)
 
-    # 方法 1：pymem（需要管理员）
+    # 使用 pymem（已有进程句柄）
     try:
         import pymem
         for name in ["Weixin.exe", "WeChat.exe"]:
             try:
                 pm = pymem.Pymem(name)
                 return pm.read_bytes(base, read_size)
-            except (pymem.exception.ProcessNotFound, pymem.exception.MemoryReadError):
+            except Exception:
                 continue
     except ImportError:
-        pass
-
-    # 方法 2：ctypes + kernel32 ReadProcessMemory（可能需要管理员）
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        kernel32 = ctypes.windll.kernel32
-        PROCESS_VM_READ = 0x0010
-        PROCESS_QUERY_INFORMATION = 0x0400
-
-        for name in ["Weixin.exe", "WeChat.exe"]:
-            hwnd = ctypes.windll.user32.FindWindowW(None, name)
-            if not hwnd:
-                continue
-            pid = wintypes.DWORD()
-            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-            if not pid.value:
-                continue
-
-            handle = kernel32.OpenProcess(
-                PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
-                False, pid.value
-            )
-            if not handle:
-                continue
-
-            buffer = ctypes.create_string_buffer(read_size)
-            bytes_read = ctypes.c_size_t()
-            if kernel32.ReadProcessMemory(
-                handle, ctypes.c_void_p(base), buffer, read_size, ctypes.byref(bytes_read)
-            ):
-                kernel32.CloseHandle(handle)
-                return buffer.raw[:bytes_read.value]
-            kernel32.CloseHandle(handle)
-    except Exception:
         pass
 
     return None
