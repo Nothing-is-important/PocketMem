@@ -58,6 +58,9 @@ def extract_key_from_memory() -> Optional[str]:
     chunk_size = 0x100000  # 1MB
     phone_marker = b"iphone\x00"
 
+    # 尝试多个偏移（不同微信版本可能不同）
+    KEY_OFFSETS = [0x70, 0x68, 0x78, 0x60, 0x80, 0x50, 0x90, 0xA0]
+
     for offset in range(0, module_size, chunk_size):
         try:
             chunk = pm.read_bytes(
@@ -73,18 +76,17 @@ def extract_key_from_memory() -> Optional[str]:
             if idx == -1:
                 break
 
-            # 密钥在 "iphone\x00" 前约 0x70 字节
-            key_offset = idx - 0x70
-            if key_offset >= 0:
-                key_bytes = chunk[key_offset:key_offset + 64]
-                # 验证：64 字节非零 hex 字符串
-                if len(key_bytes) == 64 and key_bytes != b"\x00" * 64:
-                    try:
-                        key_hex = key_bytes.decode("ascii")
-                        if all(c in "0123456789abcdefABCDEF" for c in key_hex):
-                            return key_hex.lower()
-                    except UnicodeDecodeError:
-                        pass
+            for key_offset in KEY_OFFSETS:
+                pos = idx - key_offset
+                if pos >= 0:
+                    key_bytes = chunk[pos:pos + 64]
+                    if len(key_bytes) == 64 and key_bytes != b"\x00" * 64:
+                        try:
+                            key_hex = key_bytes.decode("ascii")
+                            if all(c in "0123456789abcdefABCDEF" for c in key_hex):
+                                return key_hex.lower()
+                        except UnicodeDecodeError:
+                            pass
             idx += 1
 
     return None
@@ -123,18 +125,78 @@ def get_wechat_key() -> Optional[str]:
     """获取微信数据库解密密钥（尝试多种方法）。
 
     Returns:
-        (key, method) 或 (None, error_message)
+        64 字符 hex 密钥，失败返回 None
     """
     # 方法 1：内存扫描（需要管理员权限 + 微信登录）
     if _is_admin():
         key = extract_key_from_memory()
         if key:
             return key
-    
-    # 方法 2：配置文件查找（降级方案，无需管理员）
+
+    # 方法 2：通用 hex 密钥模式扫描（无需特定标记）
+    if _is_admin():
+        key = _scan_hex_key_in_memory()
+        if key:
+            return key
+
+    # 方法 3：配置文件查找（降级方案，无需管理员）
     key = extract_key_from_config()
     if key:
         return key
+
+    return None
+
+
+def _scan_hex_key_in_memory() -> Optional[str]:
+    """扫描 WeChatWin.dll 内存中的通用 hex 密钥模式。
+
+    不依赖特定标记偏移，直接搜索 64 字符 hex 字符串。
+    """
+    try:
+        import pymem
+        import pymem.process
+    except ImportError:
+        return None
+
+    try:
+        pm = pymem.Pymem("Weixin.exe")
+    except pymem.exception.ProcessNotFound:
+        try:
+            pm = pymem.Pymem("WeChat.exe")
+        except pymem.exception.ProcessNotFound:
+            return None
+
+    try:
+        wechat_module = pymem.process.module_from_name(
+            pm.process_handle, "WeChatWin.dll"
+        )
+    except pymem.exception.ModuleNotFoundError:
+        return None
+
+    if not wechat_module:
+        return None
+
+    import re
+    hex_pattern = re.compile(rb"[0-9a-fA-F]{64}")
+
+    module_base = wechat_module.lpBaseOfDll
+    module_size = wechat_module.SizeOfImage
+    chunk_size = 0x100000
+
+    for offset in range(0, module_size, chunk_size):
+        try:
+            chunk = pm.read_bytes(
+                module_base + offset,
+                min(chunk_size, module_size - offset),
+            )
+        except pymem.exception.MemoryReadError:
+            continue
+
+        for match in hex_pattern.finditer(chunk):
+            key = match.group().decode("ascii").lower()
+            # 基本的密钥合理性检查：不是全零或全F
+            if key != "0" * 64 and key != "f" * 64:
+                return key
 
     return None
 
