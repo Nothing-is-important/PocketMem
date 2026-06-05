@@ -15,79 +15,150 @@ from typing import Optional
 def extract_key_from_memory() -> Optional[str]:
     """从 Weixin.exe 进程内存提取 SQLCipher 密钥。
 
-    原理：密钥以 x'<64 hex chars><32 hex chars>' 格式存储在
-    WeChatWin.dll 内存中，位于 "iphone\x00" 标记之前 ~0x70 字节处。
+    使用 psutil 获取 WeChatWin.dll 基址（无需管理员），
+    然后用 pymem 或 ctypes 读取进程内存。
 
     Returns:
         64 字符 hex 密钥字符串，失败返回 None
     """
-    # Windows 平台检查
     if sys.platform != "win32":
         return None
 
-    # 检查管理员权限
-    if not _is_admin():
+    # 获取 WeChatWin.dll 基址
+    module_base, module_size = _get_wechatwin_base()
+    if not module_base:
         return None
 
-    try:
-        import pymem
-        import pymem.process
-    except ImportError:
+    # 尝试读取进程内存
+    chunk = _read_process_memory(module_base, module_size)
+    if not chunk:
         return None
 
-    try:
-        pm = pymem.Pymem("Weixin.exe")
-    except pymem.exception.ProcessNotFound:
-        try:
-            pm = pymem.Pymem("WeChat.exe")
-        except pymem.exception.ProcessNotFound:
-            return None
-
-    try:
-        wechat_module = pymem.process.module_from_name(
-            pm.process_handle, "WeChatWin.dll"
-        )
-    except pymem.exception.ModuleNotFoundError:
-        return None
-
-    if not wechat_module:
-        return None
-
-    module_base = wechat_module.lpBaseOfDll
-    module_size = wechat_module.SizeOfImage
-    chunk_size = 0x100000  # 1MB
+    # 搜索 iphone 标记
     phone_marker = b"iphone\x00"
+    KEY_OFFSETS = [0x70, 0x68, 0x78, 0x60, 0x80, 0x50, 0x90, 0xA0, 0x40, 0xB0]
 
-    # 尝试多个偏移（不同微信版本可能不同）
-    KEY_OFFSETS = [0x70, 0x68, 0x78, 0x60, 0x80, 0x50, 0x90, 0xA0]
+    idx = 0
+    while True:
+        idx = chunk.find(phone_marker, idx)
+        if idx == -1:
+            break
 
-    for offset in range(0, module_size, chunk_size):
+        for key_offset in KEY_OFFSETS:
+            pos = idx - key_offset
+            if pos >= 0:
+                key_bytes = chunk[pos:pos + 64]
+                if len(key_bytes) == 64 and key_bytes != b"\x00" * 64:
+                    try:
+                        key_hex = key_bytes.decode("ascii")
+                        if all(c in "0123456789abcdefABCDEF" for c in key_hex):
+                            return key_hex.lower()
+                    except UnicodeDecodeError:
+                        pass
+        idx += 1
+
+    return None
+
+
+def _get_wechatwin_base() -> tuple:
+    """获取 WeChatWin.dll 的基址和大小（不需要管理员）。
+
+    Returns:
+        (base_address, size) 或 (None, None)
+    """
+    try:
+        import psutil
+    except ImportError:
+        return None, None
+
+    process_names = ["Weixin.exe", "WeChat.exe", "weixin.exe", "wechat.exe"]
+    target_pid = None
+
+    for proc in psutil.process_iter(["pid", "name"]):
         try:
-            chunk = pm.read_bytes(
-                module_base + offset,
-                min(chunk_size, module_size - offset),
-            )
-        except pymem.exception.MemoryReadError:
+            if proc.info["name"] and proc.info["name"].lower() in [n.lower() for n in process_names]:
+                target_pid = proc.info["pid"]
+                break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
 
-        idx = 0
-        while True:
-            idx = chunk.find(phone_marker, idx)
-            if idx == -1:
-                break
+    if not target_pid:
+        return None, None
 
-            for key_offset in KEY_OFFSETS:
-                pos = idx - key_offset
-                if pos >= 0:
-                    key_bytes = chunk[pos:pos + 64]
-                    if len(key_bytes) == 64 and key_bytes != b"\x00" * 64:
-                        try:
-                            key_hex = key_bytes.decode("ascii")
-                            if all(c in "0123456789abcdefABCDEF" for c in key_hex):
-                                return key_hex.lower()
-                        except UnicodeDecodeError:
-                            pass
-            idx += 1
+    try:
+        proc = psutil.Process(target_pid)
+        for mmap in proc.memory_maps():
+            if "WeChatWin.dll" in mmap.path:
+                # rss 是内存起始地址
+                addr = int(mmap.addr.split("-")[0], 16) if "-" in mmap.addr else 0
+                if addr:
+                    return addr, mmap.rss
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        pass
+
+    return None, None
+
+
+def _read_process_memory(base: int, size: int, max_read: int = 50 * 1024 * 1024) -> bytes:
+    """读取进程内存（尝试多种方法）。
+
+    Args:
+        base: 起始地址
+        size: 模块大小
+        max_read: 最大读取字节数（默认 50MB）
+
+    Returns:
+        读取到的字节，失败返回 None
+    """
+    read_size = min(size, max_read)
+
+    # 方法 1：pymem（需要管理员）
+    try:
+        import pymem
+        for name in ["Weixin.exe", "WeChat.exe"]:
+            try:
+                pm = pymem.Pymem(name)
+                return pm.read_bytes(base, read_size)
+            except (pymem.exception.ProcessNotFound, pymem.exception.MemoryReadError):
+                continue
+    except ImportError:
+        pass
+
+    # 方法 2：ctypes + kernel32 ReadProcessMemory（可能需要管理员）
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        PROCESS_VM_READ = 0x0010
+        PROCESS_QUERY_INFORMATION = 0x0400
+
+        for name in ["Weixin.exe", "WeChat.exe"]:
+            hwnd = ctypes.windll.user32.FindWindowW(None, name)
+            if not hwnd:
+                continue
+            pid = wintypes.DWORD()
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if not pid.value:
+                continue
+
+            handle = kernel32.OpenProcess(
+                PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
+                False, pid.value
+            )
+            if not handle:
+                continue
+
+            buffer = ctypes.create_string_buffer(read_size)
+            bytes_read = ctypes.c_size_t()
+            if kernel32.ReadProcessMemory(
+                handle, ctypes.c_void_p(base), buffer, read_size, ctypes.byref(bytes_read)
+            ):
+                kernel32.CloseHandle(handle)
+                return buffer.raw[:bytes_read.value]
+            kernel32.CloseHandle(handle)
+    except Exception:
+        pass
 
     return None
 
@@ -138,20 +209,20 @@ def extract_key_from_config() -> Optional[str]:
 def get_wechat_key() -> Optional[str]:
     """获取微信数据库解密密钥（尝试多种方法）。
 
-    Returns:
-        64 字符 hex 密钥，失败返回 None
+    psutil 获取模块地址不需要管理员，
+    ctypes ReadProcessMemory 在某些系统上也不需要。
     """
-    # 方法 1：内存扫描（当前进程有管理员权限时直接扫描）
-    if _is_admin():
-        key = extract_key_from_memory()
-        if key:
-            return key
+    # 方法 1：psutil + ctypes 读取（不要求管理员）
+    key = extract_key_from_memory()
+    if key:
+        return key
 
-        key = _scan_hex_key_in_memory()
-        if key:
-            return key
+    # 方法 2：通用 hex 密钥模式扫描
+    key = _scan_hex_key_in_memory()
+    if key:
+        return key
 
-    # 方法 2：UAC 提权辅助进程（弹窗确认后以管理员运行）
+    # 方法 3：UAC 提权辅助进程（弹窗确认后以管理员运行）
     try:
         from data_ingestion.wechat_key_elevated import extract_key_elevated
         key = extract_key_elevated()
@@ -160,7 +231,7 @@ def get_wechat_key() -> Optional[str]:
     except ImportError:
         pass
 
-    # 方法 3：配置文件查找（降级方案，无需管理员）
+    # 方法 4：配置文件查找（降级方案）
     key = extract_key_from_config()
     if key:
         return key
