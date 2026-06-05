@@ -123,14 +123,15 @@ def get_wechat_key() -> Optional[str]:
     """获取微信数据库解密密钥（尝试多种方法）。
 
     Returns:
-        64 字符 hex 密钥，失败返回 None
+        (key, method) 或 (None, error_message)
     """
-    # 方法 1：内存扫描（最可靠，需要管理员权限 + 微信登录）
-    key = extract_key_from_memory()
-    if key:
-        return key
-
-    # 方法 2：配置文件查找（降级方案）
+    # 方法 1：内存扫描（需要管理员权限 + 微信登录）
+    if _is_admin():
+        key = extract_key_from_memory()
+        if key:
+            return key
+    
+    # 方法 2：配置文件查找（降级方案，无需管理员）
     key = extract_key_from_config()
     if key:
         return key

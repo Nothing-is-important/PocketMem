@@ -947,6 +947,11 @@ createApp({
             try {
               const evt = JSON.parse(data);
               switch (evt.event) {
+                case 'db_diagnostics':
+                  // 显示诊断信息
+                  this.importResult = (evt.diagnostics || []).join('; ');
+                  this.importProgress.stage = evt.diagnostics ? evt.diagnostics[0] : '诊断中...';
+                  break;
                 case 'discover':
                   this.importProgress.files = evt.files || [];
                   this.importProgress.total = evt.count || 0;

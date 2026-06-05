@@ -154,14 +154,50 @@ class WechatImporter:
         """Import messages from encrypted WeChat database.
 
         Requires WeChat to be logged in and admin privileges.
-        Flow: extract key -> decrypt DB -> export TXT -> index.
-
-        Args:
-            output_dir: Directory for exported TXT files
-
-        Yields:
-            Same progress events as import_from_directory
+        Flow: check env -> extract key -> decrypt DB -> export TXT -> index.
         """
+        import sys
+
+        # 诊断信息
+        diagnostics = []
+
+        # 检查微信是否运行
+        from data_ingestion.wechat_detector import _find_wechat_process
+        wechat_running = _find_wechat_process() is not None
+        if not wechat_running:
+            diagnostics.append("微信未运行，请先登录微信")
+        else:
+            diagnostics.append("微信已运行")
+
+        # 检查管理员权限
+        import ctypes
+        try:
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except Exception:
+            is_admin = sys.platform != "win32"
+        if not is_admin:
+            diagnostics.append("未以管理员权限运行（密钥提取需要）")
+            diagnostics.append("请右键 -> 以管理员身份运行终端")
+        else:
+            diagnostics.append("管理员权限: OK")
+
+        yield {
+            "event": "db_diagnostics",
+            "diagnostics": diagnostics,
+            "wechat_running": wechat_running,
+            "is_admin": is_admin,
+        }
+
+        # 必须微信运行
+        if not wechat_running:
+            yield {
+                "event": "db_error",
+                "error": "微信未运行。请先登录微信，然后重试。",
+                "hint": "或者将微信导出的 .txt 文件放到 data/raw/ 后点击「扫描」",
+                "diagnostics": diagnostics,
+            }
+            return
+
         yield {"event": "db_discover", "stage": "extracting_key"}
 
         # Step 1: Extract encryption key
@@ -169,10 +205,16 @@ class WechatImporter:
         key = get_wechat_key()
 
         if not key:
+            # 根据情况给出具体建议
+            if not is_admin:
+                error_msg = "密钥提取需要管理员权限。请右键「以管理员身份运行」终端后重试。"
+            else:
+                error_msg = "无法提取微信密钥。请确保微信已登录且为最新版本。"
             yield {
                 "event": "db_error",
-                "error": "Cannot extract WeChat key. Ensure: (1) WeChat is logged in (2) Running as admin",
-                "hint": "Or place WeChat export .txt files in data/raw/ and click Scan"
+                "error": error_msg,
+                "hint": "或者将微信导出的 .txt 文件放到 data/raw/ 后点击「扫描」",
+                "diagnostics": diagnostics,
             }
             return
 
