@@ -1,68 +1,83 @@
-"""WeChat key extraction helper - UAC elevation.
+"""WeChat key extraction - UAC elevation via ShellExecuteW.
 
-When called as main, extracts key and prints to stdout.
-When imported, provides extract_key_elevated() for subprocess call.
+Uses Windows ShellExecute with 'runas' verb to trigger UAC popup
+for one-time admin privilege escalation.
 """
-import subprocess
+import ctypes
 import sys
 import os
-import json
+import tempfile
+import time
 
 
 def extract_key_elevated() -> str:
-    """Run key extraction via UAC-elevated subprocess.
+    """Extract key via UAC-elevated subprocess.
 
-    Triggers Windows UAC popup. Returns key or empty string.
+    Writes a temp Python script, launches it with ShellExecute(runas),
+    waits for result file. Returns key or empty string.
     """
-    script = __file__
-    try:
-        # Write a temp PowerShell script that:
-        # 1. Runs Python with the current script as admin
-        # 2. Captures output
-        ps_cmd = (
-            f'$p = Start-Process -FilePath "{sys.executable}" '
-            f'-ArgumentList "{script}", "--extract" '
-            f'-Verb RunAs -Wait -PassThru -WindowStyle Hidden; '
-            f'$p.ExitCode'
-        )
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_cmd],
-            capture_output=True, text=True, timeout=60,
-        )
-        exit_code = result.stdout.strip()
-        # Read result file
-        result_file = script + ".result"
-        if os.path.exists(result_file):
-            with open(result_file) as f:
-                key = f.read().strip()
-            os.remove(result_file)
-            if len(key) == 64:
-                return key
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass
-    return ""
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    result_file = os.path.join(tempfile.gettempdir(), "pm_key_result.txt")
+    script_file = os.path.join(tempfile.gettempdir(), "pm_extract_key.py")
 
-
-def _extract_and_save():
-    """Internal: extract key and save to temp file."""
-    result_file = __file__ + ".result"
-    try:
-        from data_ingestion.wechat_key import extract_key_from_memory
-        key = extract_key_from_memory()
-        if key:
-            with open(result_file, "w") as f:
-                f.write(key)
-    except Exception:
-        # Try generic hex scan
+    # Clean old results
+    for f in (result_file, script_file):
         try:
-            from data_ingestion.wechat_key import _scan_hex_key_in_memory
-            key = _scan_hex_key_in_memory()
-            if key:
-                with open(result_file, "w") as f:
-                    f.write(key)
-        except Exception:
+            os.remove(f)
+        except OSError:
             pass
 
+    # Write extraction script
+    script_code = f'''
+import sys, os
+sys.path.insert(0, r"{project_root}")
+try:
+    from data_ingestion.wechat_key import extract_key_from_memory, _scan_hex_key_in_memory
+    key = extract_key_from_memory()
+    if not key:
+        key = _scan_hex_key_in_memory()
+    with open(r"{result_file}", "w") as f:
+        f.write(key if key else "NONE")
+except Exception as e:
+    with open(r"{result_file}", "w") as f:
+        f.write(f"ERROR:{e}")
+'''
+    with open(script_file, "w", encoding="utf-8") as f:
+        f.write(script_code)
 
-if __name__ == "__main__":
-    _extract_and_save()
+    # Trigger UAC via ShellExecuteW
+    try:
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None,                      # hwnd
+            "runas",                   # verb - triggers UAC popup
+            sys.executable,            # python.exe
+            f'"{script_file}"',        # args
+            None,                      # working dir
+            0,                         # SW_HIDE
+        )
+        if ret <= 32:  # ShellExecute failed
+            return ""
+
+        # Wait for elevated process to finish (max 60s)
+        for _ in range(120):
+            if os.path.exists(result_file):
+                time.sleep(0.3)
+                with open(result_file, "r") as f:
+                    content = f.read().strip()
+                try:
+                    os.remove(result_file)
+                except OSError:
+                    pass
+                if content and not content.startswith("ERROR") and content != "NONE" and len(content) == 64:
+                    return content
+                return ""
+            time.sleep(0.5)
+    except Exception:
+        pass
+    finally:
+        try:
+            os.remove(script_file)
+        except OSError:
+            pass
+
+    return ""
