@@ -112,11 +112,10 @@ def _get_wechatwin_base() -> tuple:
         name_buffer = ctypes.create_unicode_buffer(MODULE_NAME_LEN)
 
         for i in range(num_modules):
-            mod_handle = hModules[i]
+            mod_handle = ctypes.cast(hModules[i], ctypes.c_void_p)
             if psapi.GetModuleFileNameExW(handle, mod_handle, name_buffer, MODULE_NAME_LEN):
                 mod_name = name_buffer.value.lower()
                 if "wechatwin.dll" in mod_name:
-                    # Get module info
                     class MODULEINFO(ctypes.Structure):
                         _fields_ = [("lpBaseOfDll", ctypes.c_void_p),
                                     ("SizeOfImage", wintypes.DWORD),
