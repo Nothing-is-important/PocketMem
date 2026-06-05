@@ -95,26 +95,40 @@ def extract_key_from_memory() -> Optional[str]:
 def extract_key_from_config() -> Optional[str]:
     """从微信配置文件尝试提取密钥（降级方案）。
 
-    某些微信版本在配置文件中存储密钥派生数据。
+    搜索已知的配置文件和目录。
     """
-    home = Path.home()
-    config_paths = [
-        home / "Documents" / "WeChat Files" / "All Users" / "config",
-        home / "Documents" / "xwechat_files" / "config",
-    ]
-
     import re
+    home = Path.home()
     hex_pattern = re.compile(r"[0-9a-fA-F]{64}")
 
-    for config_path in config_paths:
-        if not config_path.exists():
+    # 配置文件路径（文件 + 目录中的 config.data）
+    search_paths = [
+        home / "Documents" / "WeChat Files" / "All Users" / "config",
+        home / "Documents" / "WeChat Files" / "All Users" / "config" / "config.data",
+        home / "Documents" / "xwechat_files" / "config",
+        home / "Documents" / "xwechat_files" / "config" / "config.data",
+        home / "AppData" / "Roaming" / "Tencent" / "WeChat" / "All Users" / "config",
+    ]
+
+    for config_path in search_paths:
+        if not config_path.exists() or config_path.is_dir():
             continue
         try:
-            with open(config_path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
+            # 尝试文本模式读取
+            try:
+                with open(config_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+            except UnicodeDecodeError:
+                # 二进制文件，尝试 latin-1
+                with open(config_path, "r", encoding="latin-1", errors="replace") as f:
+                    content = f.read()
+
             matches = hex_pattern.findall(content)
-            if matches:
-                return matches[0].lower()
+            # 过滤明显不是密钥的模式（全0、全F等）
+            for match in matches:
+                key = match.lower()
+                if key != "0" * 64 and key != "f" * 64:
+                    return key
         except (OSError, UnicodeDecodeError):
             continue
 
