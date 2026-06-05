@@ -141,17 +141,24 @@ def get_wechat_key() -> Optional[str]:
     Returns:
         64 字符 hex 密钥，失败返回 None
     """
-    # 方法 1：内存扫描（需要管理员权限 + 微信登录）
+    # 方法 1：内存扫描（当前进程有管理员权限时直接扫描）
     if _is_admin():
         key = extract_key_from_memory()
         if key:
             return key
 
-    # 方法 2：通用 hex 密钥模式扫描（无需特定标记）
-    if _is_admin():
         key = _scan_hex_key_in_memory()
         if key:
             return key
+
+    # 方法 2：UAC 提权辅助进程（弹窗确认后以管理员运行）
+    try:
+        from data_ingestion.wechat_key_elevated import extract_key_elevated
+        key = extract_key_elevated()
+        if key:
+            return key
+    except ImportError:
+        pass
 
     # 方法 3：配置文件查找（降级方案，无需管理员）
     key = extract_key_from_config()

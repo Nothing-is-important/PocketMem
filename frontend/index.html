@@ -947,6 +947,14 @@ createApp({
             try {
               const evt = JSON.parse(data);
               switch (evt.event) {
+                case 'db_error':
+                  this.importResult = evt.error || '数据库导入失败';
+                  this.importProgress.stage = evt.error || '失败';
+                  break;
+                case 'db_fallback':
+                  this.importResult = '密钥提取失败，降级扫描 TXT 文件...';
+                  this.importProgress.stage = '降级中...';
+                  break;
                 case 'db_diagnostics':
                   // 显示诊断信息
                   this.importResult = (evt.diagnostics || []).join('; ');

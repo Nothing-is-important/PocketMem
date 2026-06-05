@@ -712,21 +712,19 @@ async def wechat_import_stream(request: Request):
 
         # 先尝试数据库解密导入
         db_imported = False
+        db_error = False
         for progress in importer.import_from_database(watch_dir):
             if progress.get("event") == "db_key_ok":
                 db_imported = True
-            elif progress.get("event") == "db_error" and not db_imported:
-                # 密钥提取失败，降级到 TXT 导入
-                yield {"data": json.dumps({
-                    "event": "db_fallback",
-                    "hint": progress.get("hint", "降级为 TXT 导入"),
-                })}
+            elif progress.get("event") == "db_error":
+                db_error = True
+                yield {"data": json.dumps(progress)}
                 break
             yield {"data": json.dumps(progress)}
             await asyncio.sleep(0.05)
 
-        if not db_imported:
-            # 降级：扫描 .txt 导出文件
+        if not db_imported and not db_error:
+            # 只在没有错误时降级到 TXT
             for progress in importer.import_from_directory(watch_dir):
                 yield {"data": json.dumps(progress)}
                 await asyncio.sleep(0.05)
