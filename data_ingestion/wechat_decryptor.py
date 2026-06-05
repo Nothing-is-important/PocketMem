@@ -247,21 +247,22 @@ def _build_message_query(columns: List[str], table: str = "message") -> str:
 
 
 def _looks_compressed(content: str) -> bool:
-    """检测内容是否像是压缩过的（二进制数据）。"""
-    if not content:
+    """Check if content appears to be compressed binary data.
+
+    Uses control character detection (0x00-0x1F) rather than
+    non-ASCII detection to avoid false positives on Chinese text.
+    """
+    if not content or len(content) < 20:
         return False
-    # ZSTD 压缩的内容通常包含不可打印字符
-    try:
-        content.encode("ascii")
-        return False
-    except UnicodeEncodeError:
-        return len(content) > 20
+    # Count control characters (excluding common whitespace)
+    control_count = sum(1 for c in content if ord(c) < 0x20 and c not in '\t\n\r')
+    return control_count > len(content) * 0.3  # >30% control chars
 
 
 def _try_decompress(content: str) -> str:
-    """尝试 ZSTD 解压。"""
+    """Try ZSTD decompression (package: zstandard)."""
     try:
-        import zstd
+        import zstandard as zstd
         raw = content.encode("latin-1", errors="replace")
         return zstd.decompress(raw).decode("utf-8", errors="replace")
     except (ImportError, Exception):

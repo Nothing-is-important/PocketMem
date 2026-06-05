@@ -122,7 +122,8 @@ class WechatImporter:
                 pipeline = self._pipeline or IngestionPipeline()
                 indexer = self._indexer
                 if indexer is None:
-                    raise ValueError("indexer is required for import")
+                    yield {"event": "file_error", "file": filepath.name, "error": "Indexer not initialized"}
+                    continue
 
                 chunks = pipeline.ingest(str(filepath))
                 deduped = pipeline.deduplicate(chunks)
@@ -235,7 +236,8 @@ class WechatImporter:
             pipeline = self._pipeline or IngestionPipeline()
             indexer = self._indexer
             if indexer is None:
-                raise ValueError("indexer is required for import")
+                yield {"event": "file_error", "file": db_file.name, "error": "Indexer not initialized"}
+                continue
 
             chunks = pipeline.ingest(str(txt_path))
             deduped = pipeline.deduplicate(chunks)

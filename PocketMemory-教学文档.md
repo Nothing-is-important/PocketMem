@@ -1350,6 +1350,70 @@ v1.3: 真正逐token流式 → vLLM加速 → 多模型兼容 → 1次LLM调用
 
 ---
 
+## 第 2.10 节：v2.0 新特性——微信消息导入 🟡 进阶 🆕
+
+> 🎯 **本节目标：** 理解真实数据接入的完整流程——从加密数据库到可检索索引。
+> 🔴 **面试必问：** "你怎么处理真实世界的 messy 数据？"
+
+### 2.10.1 两种导入路径
+
+```
+点击 "📥 微信导入"
+  │
+  ├─ 【优先】数据库解密路径（需要微信登录 + 管理员权限）
+  │   └─ 内存提取密钥 → 解密 MSG*.db → 读消息 → 导出 TXT → 索引
+  │
+  └─ 【降级】TXT 导出文件路径（无需权限）
+      └─ 扫描 data/raw/*.txt → 格式检测 → 解析 → 索引
+```
+
+### 2.10.2 密钥提取——内存扫描
+
+**原理：** 微信的 SQLCipher 解密密钥以 `x'<64 hex chars><32 hex chars>'` 格式存储在 `WeChatWin.dll` 进程内存中，位于 `"iphone\x00"` 标记前约 0x70 字节处。
+
+**核心代码：** `data_ingestion/wechat_key.py`
+- `extract_key_from_memory()`：通过 `pymem` 读取 `Weixin.exe` 进程内存，以 1MB 块扫描 `WeChatWin.dll`，查找密钥
+- `extract_key_from_config()`：降级方案，从配置文件搜索 64 字符 hex 模式
+- `get_wechat_key()`：统一入口，先内存后文件
+
+**限制：** 需要 (1) Windows (2) 管理员权限 (3) 微信已登录
+
+### 2.10.3 数据库解密——SQLCipher 4
+
+**解密流程（`data_ingestion/wechat_decryptor.py`）：**
+1. 读取加密数据库原始字节
+2. 前 16 字节为 salt
+3. PBKDF2-HMAC-SHA1 派生 32 字节 AES 密钥（4000 次迭代）
+4. 逐页解密：Page 0 IV 在 [16:32]，后续页 IV 在 [-48:-32]
+5. 验证：`SELECT name FROM sqlite_master` 成功 = 解密正确
+
+**消息读取：**
+- 兼容 WeChat 3.x（`msg` 表）和 4.x（`message` 表）
+- 自动检测列名（`talker`/`sender`/`strtalker` 等变体）
+- 仅提取文本消息（type=1）
+- 尝试 ZSTD 解压（WeChat 4.x 某些版本压缩内容）
+- 导出为标准微信 TXT 格式，兼容现有解析管线
+
+**安全：** 解密后的临时数据库在索引完成后立即删除。
+
+### 2.10.4 导入器编排——WechatImporter
+
+**`data_ingestion/wechat_importer.py`：**
+- `discover_wechat_files()`：扫描目录，通过时间戳模式识别微信格式（≥2/20 行匹配 `YYYY-MM-DD HH:MM:SS Name`）
+- `import_from_directory()`：txt 导入路径，逐个文件 parse → chunk → index
+- `import_from_database()`：db 导入路径，提取密钥 → 解密 → 导出 txt → 索引
+- 通过 generator yield 报告每步进度，供 SSE 流式传输
+
+### 2.10.5 面试讲法
+
+**"你怎么处理真实数据接入？"：**
+> "微信数据存储在加密的 SQLCipher 数据库中，不能直接读。我实现了两种导入路径——首选从进程内存提取密钥直接解密数据库，降级方案支持用户手动导出的 TXT 文件。密钥提取通过 pymem 扫描 WeChatWin.dll 内存中的特定标记模式，解密使用 PBKDF2 派生 AES 密钥逐页处理。整个流程通过 generator yield 报告实时进度，前端用 SSE 流式显示。"
+
+**"有什么坑？"：**
+> "微信版本更新会改变数据库 schema——3.x 用 `msg` 表，4.x 用 `message` 表，列名也有变体（`talker`/`sender`/`strtalker`）。我通过 PRAGMA table_info 动态检测列名来兼容。另外 ZSTD 压缩的误检测是个坑——中文文本包含非 ASCII 字符，不能用 `content.encode('ascii')` 判断是否压缩。我用控制字符比例（>30%）来判断。"
+
+---
+
 ## 第 3 节：环境搭建——从零开始
 
 ### 前置条件

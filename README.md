@@ -122,6 +122,23 @@ Router（意图分类：关键词快速路由，0ms）
 uv run python scripts/run_demo.py --serve --backend vllm
 ```
 
+### 📲 微信消息导入 v2.0 🆕
+
+支持两种方式导入微信聊天记录：
+
+| 方式 | 条件 | 说明 |
+|------|------|------|
+| **数据库解密** | 微信已登录 + 管理员权限 | 从进程内存提取密钥，直接解密 MSG*.db |
+| **TXT 导出** | 无需权限 | 微信桌面版导出的 .txt 文件放 `data/raw/` |
+
+```bash
+# 数据库导入（需要以管理员身份运行）
+uv run python scripts/run_demo.py --serve
+# 点击侧边栏 "📥 微信导入"
+```
+
+技术细节：SQLCipher 4 解密（AES-256-CBC）+ 内存密钥提取（pymem）+ 兼容 WeChat 3.x/4.x schema。
+
 ### 📦 模型下载——国内网络友好
 
 模型自动发现优先级：**本地路径 → ModelScope（免科学上网）→ HuggingFace**
