@@ -693,8 +693,8 @@ async def wechat_status():
 async def wechat_import_stream(request: Request):
     """导入微信聊天记录 —— SSE 流式进度报告。
 
-    扫描 data/raw/ 目录中的微信导出 .txt 文件，
-    通过 SSE 实时报告每个文件的解析和索引进度。
+    优先尝试数据库解密导入（需要微信登录 + 管理员权限），
+    降级为扫描 data/raw/ 中的 .txt 导出文件。
     """
     source_mgr = getattr(request.app.state, "source_manager", None)
     pipeline = getattr(request.app.state, "pipeline", None)
@@ -710,9 +710,26 @@ async def wechat_import_stream(request: Request):
         importer = WechatImporter(pipeline=pipeline, indexer=indexer)
         watch_dir = source_mgr.watch_dir()
 
-        for progress in importer.import_from_directory(watch_dir):
+        # 先尝试数据库解密导入
+        db_imported = False
+        for progress in importer.import_from_database(watch_dir):
+            if progress.get("event") == "db_key_ok":
+                db_imported = True
+            elif progress.get("event") == "db_error" and not db_imported:
+                # 密钥提取失败，降级到 TXT 导入
+                yield {"data": json.dumps({
+                    "event": "db_fallback",
+                    "hint": progress.get("hint", "降级为 TXT 导入"),
+                })}
+                break
             yield {"data": json.dumps(progress)}
             await asyncio.sleep(0.05)
+
+        if not db_imported:
+            # 降级：扫描 .txt 导出文件
+            for progress in importer.import_from_directory(watch_dir):
+                yield {"data": json.dumps(progress)}
+                await asyncio.sleep(0.05)
 
         # 导入完成后刷新来源列表缓存
         invalidate_suggestion_cache()
