@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PocketMemory - 端侧个人记忆助手</title>
+<title>TeamMind - 企业知识助手 | 私有化部署 AI 检索</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23161b22'/><text x='50' y='68' font-size='56' text-anchor='middle' dominant-baseline='middle'>🧠</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <style>
@@ -605,7 +605,7 @@ body {
   <!-- ═══════════ HEADER ═══════════ -->
   <div class="header">
     <div class="header-left">
-      <span class="header-logo">🧠 PocketMemory</span>
+      <span class="header-logo">🔍 TeamMind</span>
     </div>
     <div class="header-right">
       <span v-if="wechatStatus.running" class="badge badge-online" :title="wechatStatus.hint">💬 微信在线</span>
@@ -682,7 +682,7 @@ body {
     <!-- Chat Window (above everything) -->
     <div class="chat" ref="msgContainer">
       <div v-for="(msg, idx) in messages" :key="idx" :class="['msg', msg.role]">
-        <div class="sender">{{ msg.role === 'user' ? '你' : 'PocketMemory' }}</div>
+        <div class="sender">{{ msg.role === 'user' ? '你' : 'TeamMind' }}</div>
         <!-- 思考过程（可折叠） -->
         <div v-if="msg.thinking || msg._thinkingStream" class="think-block">
           <div class="think-header" @click="toggleThink(msg)">
@@ -732,7 +732,7 @@ body {
         <input
           v-model="query"
           @keyup.enter="sendQuery"
-          placeholder="搜索你的记忆，例如：张三推荐了哪家火锅店？"
+          placeholder="搜索企业知识库，例如：凤凰项目技术选型的结论是什么？"
           :disabled="loading"
         />
         <button @click="sendQuery" :disabled="loading || !query.trim()">

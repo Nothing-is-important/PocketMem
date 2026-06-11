@@ -3,6 +3,7 @@
 检测文件类型，路由到正确的加载器，输出统一的 DocumentChunk 列表。
 """
 
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -13,7 +14,7 @@ from .wechat_parser import filter_text_messages, parse_wechat_export
 
 
 SUPPORTED_EXTENSIONS = {
-    ".txt": "wechat",
+    ".txt": "auto",       # 自动检测: 含 "From:" 头 → 邮件, 含日期+发送者 → 微信
     ".md": "markdown",
     ".markdown": "markdown",
     ".pdf": "pdf",
@@ -56,7 +57,12 @@ class IngestionPipeline:
 
         source_type = SUPPORTED_EXTENSIONS[ext]
 
-        if source_type == "wechat":
+        if source_type == "auto":
+            source_type = self._detect_source_type(filepath)
+
+        if source_type == "mail":
+            return self._ingest_mail(filepath)
+        elif source_type == "wechat":
             return self._ingest_wechat(filepath)
         elif source_type == "markdown":
             return load_markdown(filepath, self.chunker)
@@ -64,6 +70,19 @@ class IngestionPipeline:
             return load_pdf(filepath, self.chunker)
         else:
             raise ValueError(f"未知来源类型: {source_type}")
+
+    def _detect_source_type(self, filepath: str) -> str:
+        """自动检测 .txt 文件的类型：邮件 or 微信聊天记录。"""
+        with open(filepath, "r", encoding="utf-8") as f:
+            head = f.read(500)
+        if re.search(r"^(From|To|Date|Subject):\s", head, re.MULTILINE):
+            return "mail"
+        return "wechat"
+
+    def _ingest_mail(self, filepath: str) -> list:
+        """摄取邮件文件。"""
+        from .mail_parser import load_mail
+        return load_mail(filepath, self.chunker)
 
     def ingest_directory(self, dirpath: str) -> List[DocumentChunk]:
         """摄取目录中所有支持的文件。

@@ -1,15 +1,16 @@
 """InferenceBackend 抽象层 —— 统一端侧推理接口。
 
-支持后端：
-- local_simulate: transformers 本地推理（开发调试）
+支持三种后端模式：
+- local_simulate: 本地模型推理（PC开发/机密文档）
 - vllm: vLLM OpenAI 兼容 API（生产，5-10x 加速）
-- mobile_android/mobile_ios: 手机部署骨架
+- dual_mode: 自动切换（公开→API，机密→本地）
 """
 
 from .base import InferenceBackend
 from .local_simulate import LocalSimulateBackend
 from .mobile_backend import MobileBackend
 from .vllm_backend import VLLMBackend
+from .dual_backend import DualModeBackend
 
 
 def create_backend(
@@ -18,9 +19,10 @@ def create_backend(
     """工厂函数：根据类型字符串创建推理后端实例。"""
     backends = {
         "local_simulate": LocalSimulateBackend,
-        "vllm": VLLMBackend,
         "mobile_android": MobileBackend,
         "mobile_ios": MobileBackend,
+        "vllm": VLLMBackend,
+        "dual_mode": DualModeBackend,
     }
     cls = backends.get(backend_type)
     if cls is None:
@@ -34,7 +36,8 @@ def create_backend(
 __all__ = [
     "InferenceBackend",
     "LocalSimulateBackend",
-    "VLLMBackend",
     "MobileBackend",
+    "VLLMBackend",
+    "DualModeBackend",
     "create_backend",
 ]

@@ -530,21 +530,21 @@ def _generate_template_suggestions(vector_store, source_mgr) -> list:
 
     # 3. 模板生成
     person_templates = [
-        "{name}推荐了什么东西？",
-        "{name}最近在做什么？",
-        "关于{name}大家都讨论了什么？",
+        "{name}负责什么工作？",
+        "{name}最近的发言是什么？",
+        "{name}参与了哪些决策？",
     ]
     topic_templates = [
-        "我的笔记里关于{topic}写了什么？",
-        "{topic}有哪些方法？",
-        "关于{topic}有什么讨论？",
+        "{topic}的方案是什么？",
+        "{topic}的结论是什么？",
+        "{topic}的技术选型有哪些？",
     ]
     generic_defaults = [
-        "最近有什么重要的事？",
-        "大家都在讨论什么话题？",
-        "张三推荐了哪家火锅店？",
-        "我的笔记里关于AI写了什么？",
-        "端侧推理优化有哪些方法？",
+        "凤凰项目技术选型的结论是什么？",
+        "W4A8量化的效果怎么样？",
+        "最近有哪些重要的项目决策？",
+        "AccessGuard是什么？怎么设计的？",
+        "文档分级的安全方案是什么？",
     ]
 
     suggestions = []

@@ -19,3 +19,4 @@ data/*.sqlite3
 # Session files
 .omo/
 data/
+cuad-qa/
