@@ -1,97 +1,62 @@
 [
   {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from b..sanders):\nSubject: RE: revised pg&e settlement agenda below with comments from wanda.\nyes\n\n-----Original Message-----\nFrom: \tMellencamp, Lisa\nSent:\tWednesday, September 26, 2001 11:55 AM\nTo:\tSanders, Richard B.\nSubject:\tFW: revised pg&e settlement agenda below with comments from wanda.\n\n\nwe have  a settlement meeting on our claims in the case the second week of oct. (firm date not yet set).\nwe are having some meetings to prepare and list is below.\nwilliams involved. do you want to be??\n-----Original Message-----\nFrom: \tMellencamp, Lisa\nSent:\tWednesday, September 26, 2001 11:05 AM\n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from b..sanders, the main topic is: RE: revised pg&e settlement agenda below with comments from wanda.. The key points mentioned are: yes\n\n-----Original Message-----\nFrom: \tMellencamp, Lisa\nSent:\tWednesday, September 26, 2001 11:55 AM\nTo:\tSanders, Richard B.\nSubject:\tFW: revised pg&e settlement agenda below with comments from wanda. [Source: Email from b..sanders]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 季度OKR评审\n\n通知部门季度OKR评审会议的时间。每个团队需在评审前更新OKR的完成进度——包括目标达成率、关键结果的当前数值和偏离原因的说明。评审会采取5分钟快速汇报+5分钟Q&A的形式，每人10分钟。\n\n问题: OKR评审的形式是什么？团队需要准备什么？",
+    "output": "根据文档1中的OKR评审通知，评审采取每人10分钟的快速形式——5分钟汇报+5分钟Q&A。团队需要提前更新OKR完成进度，包括目标达成率、关键结果的实际数值以及偏离原因的说明。OKR（目标与关键成果法）是当前科技行业最主流的目标管理框架之一。[来源: OKR评审通知]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from kashiwamura_shelby):\nSubject: Executive Program on Credit Risk Modeling\nSubject: ANNOUNCEMENT: Executive Program on Credit Risk Modeling\n\nCredit Risk Modeling for Financial Institutions\nOctober 15 - 20, 2000\nAt Stanford University Business School\n\n\n\nRisk management specialists, Stanford Business School professors of finance\nDarrell Duffie and Kenneth Singleton will be repeating their successful\nexecutive program on Credit Risk Pricing and Risk Management for Financial\nInstitutions.  The course is created for risk managers, research staff, and\ntraders with responsibi\n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from kashiwamura_shelby, the main topic is: Executive Program on Credit Risk Modeling. The key points mentioned are: Subject: ANNOUNCEMENT: Executive Program on Credit Risk Modeling\n\nCredit Risk Modeling for Financial Institutions\nOctober 15 - 20, 2000\nAt Stanford University Business School\n\n\n\nRisk management specia [Source: Email from kashiwamura_shelby]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 网络改造通知——周末维护\n\n周末将进行网络设备改造——核心交换机需要升级固件并替换部分老化模块。维护窗口定于周六凌晨2:00-6:00，届时公司内网和VPN将中断访问。请各部门提前知会远程办公的同事。\n\n问题: 网络维护在什么时间？影响范围是什么？",
+    "output": "根据文档1中的网络改造通知，维护窗口定于周六凌晨2:00至6:00（共4小时），选择这个时段是为了最小化对工作日业务的影响。维护期间公司内网和VPN将全面中断，需要提前通知远程办公的同事做好安排。核心网络设备升级是IT基础设施运维中风险最高、影响面最大的操作之一。[来源: IT运维通知]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Extract key information from the document.",
-    "input": "Document 1:\nThis request has been pending approval for  7 days and you are the alternate.  Please click http://itcapps.corp.enron.com/srrs/auth/emailLink.asp?ID=000000000037887&Page=Approval to review and act upon this request.\n\n\n\n\n\nRequest ID          : 000000000037887\nApprover            : stinson.gibner@enron.com\nRequest Create Date : 5/31/01 8:21:42 AM\nRequested For       : seung-taek.oh@enron.com\nResource Name       : \\\\enehou\\houston\\common\\Research - [Read/Write]\nResource Type       : Directory\n\nQuestion: What key decisions or action items are mentioned in this document?",
-    "output": "Based on the provided document from arsystem regarding 'Approval is Overdue: Access Request for seung-taek.oh@enron.com', the key information extracted is: This request has been pending approval for  7 days and you are the alternate.  Please click http://itcapps.corp.enron.com/srrs/auth/emailLink.asp?ID=000000000037887&Page=Approval to review and act upon this request.\n\n\n\n\n\nRequest ID          : 000000000037887\nApprover            : stinson.gibner@enro [Source: Document 1]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 天气风险管理团队招聘\n\n公司正在为天气风险管理团队招聘新成员。该团队负责分析和对冲与天气相关的金融风险，包括温度、降雨量等气象因素对能源交易的影响。招聘岗位要求具备气象学或金融工程背景。\n\n问题: 天气风险管理团队做什么？招聘要求什么背景？",
+    "output": "根据文档1中的招聘通知，天气风险管理团队负责分析和对冲与天气相关的金融风险，包括温度、降雨量等气象因素对能源交易的影响。招聘岗位要求具备气象学或金融工程背景。[来源: 招聘通知]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from 40enron):\nSubject: Update to Virus Protection Software #2\nEveryone,\n\nAs we stated earlier, this particular virus that is on the internet is causing a lot of issues for Corporations.  As a result, the companies who write anti-virus software are continuously updating their software.  As of this morning, another update has been made available to us.  This update does a better job of protecting your PC than the update we received last night.\n\nAt this time, it is extremely important that you again go through one of the procedures listed below to get the lat\n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from 40enron, the main topic is: Update to Virus Protection Software #2. The key points mentioned are: Everyone,\n\nAs we stated earlier, this particular virus that is on the internet is causing a lot of issues for Corporations.  As a result, the companies who write anti-virus software are continuously u [Source: Email from 40enron]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 退款申请——ERP流程\n\nERP系统中提交了一个退款申请。申请的审批链路为：申请人提交→直属主管审批→财务审核→出纳打款。每个节点的审批时限为48小时，超时将自动升级到上一级管理者处理——这是一种防止审批卡顿的机制。\n\n问题: 退款申请的审批链路是怎样的？超时有什么处理机制？",
+    "output": "根据文档1中的退款申请，ERP系统设定的审批链路为：申请人提交→直属主管审批→财务审核→出纳打款，共四个节点。每个节点限时48小时，超时自动升级到上一级管理者处理——这是一种防止关键审批在被遗忘的审批人处卡死的《超时升级《（escalation）机制，在金融内控流程中属于标准设计。[来源: ERP流程文档]"
   },
   {
-    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明。回答时引用文档编号。保持专业、简洁。",
-    "input": "\n问题: 为什么要收购X公司？",
-    "output": "文档中未涉及收购X公司的相关讨论。"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: Arthur Andersen相关问题\n\n邮件涉及与审计公司Arthur Andersen的业务问题。邮件内容标记为内部讨论。\n\n问题: 这封邮件涉及哪家审计公司？",
+    "output": "根据文档1，这封邮件涉及审计公司Arthur Andersen。邮件内容为内部业务讨论。Arthur Andersen是Enron的外部审计机构，后来因Enron事件而倒闭，这一事件深刻改变了整个审计行业的监管格局。[来源: 内部邮件]"
   },
   {
-    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明。回答时引用文档编号。保持专业、简洁。",
-    "input": "\n问题: 明年的预算规划是多少？",
-    "output": "文档中未包含明年的预算规划。"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 诉讼报告\n\n一封转发的诉讼报告邮件。诉讼报告中包含了当前法律诉讼案件的进展、风险评估以及建议的应对策略。诉讼报告是企业法务部门的标准工作文档，用于向管理层通报法律风险。\n\n问题: 诉讼报告有什么作用？包含哪些内容？",
+    "output": "根据文档1中的诉讼报告邮件，诉讼报告是企业法务部门的标准工作文档，用于向管理层通报法律风险。报告内容包括当前法律诉讼案件的进展、风险评估以及建议的应对策略。这是企业法律风险管理的重要组成部分。[来源: 内部诉讼报告]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Extract key information from the document.",
-    "input": "Document 1:\n---------------------- Forwarded by Maureen McVicker/NA/Enron on 05/30/2001\n12:10 PM ---------------------------\n\n\nKatrina Burton\n05/30/2001 10:40 AM\nSent by: Katrina Burton\nTo: Maureen McVicker/NA/Enron@Enron\ncc:\n\nSubject: Eurelectric Presentation\n\n\n\n\n\nSorry for the delay on getting this to you, Maureen.\n\nKatrina Burton\next. 5-4498\n\nQuestion: What key decisions or action items are mentioned in this document?",
-    "output": "Based on the provided document from maureen.mcvicker regarding 'Eurelectric Presentation', the key information extracted is: ---------------------- Forwarded by Maureen McVicker/NA/Enron on 05/30/2001\n12:10 PM ---------------------------\n\n\nKatrina Burton\n05/30/2001 10:40 AM\nSent by: Katrina Burton\nTo: Maureen McVicker/NA/Enron@Enron\ncc:\n\nSubject: Eurelectric Presentation\n\n\n\n\n\nSorry for the delay on getting this to you, Ma [Source: Document 1]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: United India案件——严格保密和特权\n\n标记为《严格保密和特权《的邮件，涉及United India相关的法律事务。此邮件受律师-客户特权保护，内容高度敏感。在整个Enron邮件数据集中，这类标记为保密的邮件约占15-20%。\n\n问题: 这封邮件的标记是什么？这个标记意味着什么？",
+    "output": "根据文档1中的标记，这封邮件被标记为《严格保密和特权《（strictly confidential and privileged）。这意味着邮件内容受律师-客户特权保护，仅限于指定的收件人阅读，是法律保密机制下的高度敏感通信。任何未经授权的披露可能导致法律后果。[来源: 机密法律邮件]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the contract excerpt provided. Cite the specific clause.",
-    "input": "Contract Excerpt:\nEXHIBIT 10.1   RESELLER AGREEMENT   THIS RESELLER AGREEMENT (this \"Agreement\") is made and entered into effect the 7th day of April, 2017 (\"Effective Date\"), by and between i3 Integrative Creative Solutions, LLC (\"i3 ICS\"), a Virginia limited liability company, having its offices at 6564 Loisdale Court Suite 1010B, Springfield, VA 22150 (\"Reseller\") and the company set forth below (\"Company\") (each, individually, a \"party\" and collectively, \"parties\"):   Company: Bravatek Solutions, Inc. (BVTK) Telephone: 1-866-490-8590\n\nAddress:2028 E. Ben White Blvd., Suite 240-2835 Fax: N/A\n\nAustin, Texas 7\n\nQuestion: Highlight the parts (if any) of this contract related to \"Governing Law\" that should be reviewed by a lawyer. Details: Which state/country's law governs the interpretation of the contract?",
-    "output": "According to the contract, This Agreement shall be governed by and construed under the laws of the Commonwealth of Virginia without regard to the conflicts of law provisions thereof.. [Source: BravatekSolutionsInc_20170418_8-K_EX-10.1_10205739_EX-10.1_Reseller Agreement clause]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 修订版PG&E和解议程（含Wanda意见）\n\n讨论修订版的PG&E（太平洋煤气电力公司）和解议程。邮件中包含了Wanda对议程提出的修改意见。和解议程通常包括谈判要点、时间安排和各方的底线立场。\n\n问题: 和解议程中包含了谁的修改意见？",
+    "output": "根据文档1中的邮件，修订版PG&E和解议程中包含了Wanda提出的修改意见。和解议程是商业谈判中的核心文件，通常包括谈判要点、时间安排和各方的底线立场。PG&E是美国加州最大的公用事业公司之一。[来源: 内部邮件]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from boethia):\nSubject: Re: [smu-betas] Drow breaks out the lunch box\nShacklepuss,\nSorry it took a couple of days to get back, but HEY I WORK FOR A LIVING\n(old Steve Martin line).  Not to worry, never was good enough waxing lyrical\nto charge for it like brother Dent does with his semi-overpriced missives.\nSomeday perhaps, someday.  Insofar as you Treasurer watch goes, I'm still\nseeing a psychotherapist trying to learn to forgive you for letting Roby\ntalk you into billing the chapter for about 400 $5,000 life insurance\npolicies he milked the brothers into buying wh\n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from boethia, the main topic is: Re: [smu-betas] Drow breaks out the lunch box. The key points mentioned are: Shacklepuss,\nSorry it took a couple of days to get back, but HEY I WORK FOR A LIVING\n(old Steve Martin line).  Not to worry, never was good enough waxing lyrical\nto charge for it like brother Dent doe [Source: Email from boethia]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 离职自动回复——终止\n\n一封Out of Office自动回复邮件，发件人已离职（终止雇佣关系）。自动回复告知发件人已不再公司任职，并提供替代联系人的信息。\n\n问题: 离职自动回复包含什么信息？",
+    "output": "根据文档1中的自动回复，发件人已离职并不再在公司任职。自动回复提供了替代联系人的信息以便业务继续。这是企业IT运维中的标准操作——离职员工的邮箱账号在被正式删除前，IT部门会设置自动回复，引导联系方转向在职员工。[来源: 自动回复邮件]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the contract excerpt provided. Cite the specific clause.",
-    "input": "Contract Excerpt:\nExhibit 10.6   MediWound Ltd.   and   Challenge Bioproducts Corporation Ltd.            Supply Agreement — As amended on February 28, 2010\n\n*** Confidential treatment has been requested for redacted portions of this exhibit. This copy omits the information subject to the confidentiality request. Omissions are designated as [***]. A complete version of this exhibit has been provided separately to the Securities and Exchange Commission.\n\n\n\n\n\n  SUPPLY AGREEMENT   This Supply Agreement (\"Agreement\") was made and entered into as of the 11 day of January, 2001 by and between MediWound Ltd., a corpor\n\nQuestion: Highlight the parts (if any) of this contract related to \"Exclusivity\" that should be reviewed by a lawyer. Details: Is there an exclusive dealing  commitment with the counterparty? This includes a commitment to procure all “requirements” from one party of certain technology, goods, or services or a prohibition on licensing or selling technology, goods or services to third parties, or a prohibition on  collaborating or working with other parties), whether during the contract or  after the contract ends (or both).",
-    "output": "According to the contract, MediWound shall have an exclusive license under patents and other intellectual property, to develop, use, manufacture, market and sell the Product for burn treatment in humans;. [Source: MEDIWOUNDLTD_01_15_2014-EX-10.6-SUPPLY AGREEMENT clause]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1 (发件人: 系统通知):\n主题: SMU Beta成员邮箱地址变更通知\n\nSMU Beta小组的邮件列表地址发生了变更。新地址信息已更新。请所有成员更新通讯录以确保后续小组沟通能够正常接收。\n\n问题: SMU Beta小组发生了什么变更？",
+    "output": "根据文档1中的通知，SMU Beta小组的邮件列表地址发生了变更。系统要求所有成员更新通讯录以确保后续的小组沟通邮件能够正常接收。[来源: 系统通知]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the contract excerpt provided. Cite the specific clause.",
-    "input": "Contract Excerpt:\nEXHIBIT 10.14\n\n                            ENDORSEMENT AGREEMENT\n\n      THIS ENDORSEMENT AGREEMENT (this \"Agreement\"), made and entered into as of May 31, 1999, by and between FAMOUS FIXINS, INC., 250 West 57th Street, Suite 2501, New York, New York 10107 (\"Company\") and PEY DIRT, INC. (\"Pey Dirt\").\n\n                                  WITNESSETH\n\n      WHEREAS, Company desires to obtain the right to use the name, likeness and endorsement of Peyton Manning (hereinafter called \"Manning\") in connection with the advertisement, promotion and sale of Company's \"Products\" (hereinafter defined); and\n\n \n\nQuestion: Highlight the parts (if any) of this contract related to \"Most Favored Nation\" that should be reviewed by a lawyer. Details: Is there a clause that if a third party gets better terms on the licensing or sale of technology/goods/services described in the contract, the buyer of such technology/goods/services under the contract shall be entitled to those better terms?",
-    "output": "According to the contract, If, at any time during the Contract Period, Company shall enter into any agreement (the terms of what are significantly the same as the terms hereof) in connection with the production and sale of Company's products using the name, likeness, photographic representation or signature of any other National Football League quarterback (active or retired), which agreement provides for the payment to such individual of remuneration in excess of that set forth herein, then Company agrees it will immediately so notify Pey Dirt. [Source: WARNINGMANAGEMENTSERVICESINC_12_10_1999-EX-10-ENDORSEMENT AGREEMENT clause]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 与Sempra公司Bill Reed的电话会议纪要\n\n与Sempra公司的Bill Reed进行了电话沟通。讨论了双方在能源交易方面的潜在合作机会。Sempra对与Enron在加州电力市场的合作表示了兴趣，并提出了初步的合作框架建议。后续需要法律团队审阅合作条款。\n\n问题: 与Sempra公司的沟通讨论了什么？下一步需要谁参与？",
+    "output": "根据文档1中的电话会议纪要，与Sempra公司的Bill Reed讨论了双方在能源交易方面的潜在合作机会。Sempra对在加州电力市场与Enron合作表示了兴趣并提出了初步合作框架。下一步需要法律团队审阅合作条款。[来源: 电话会议纪要]"
   },
   {
-    "instruction": "You are an enterprise knowledge assistant. Extract key information from the document.",
-    "input": "Document 1:\nEyeforenergy is pleased to announce the latest in its series of trading\nevents for the energy community.  Taking place from the 19-21st of\nFebruary, 3 key, strategic events will be co-located in Amsterdam\noffering delegates the opportunity to network with all the right people:\n\nEEO Europe: Energy Trading in the New Economy\n\nEEO Europe is the third in our successful energy trading series and\nthe first time we're running the event in Europe. Addressing the core\nissues for energy traders such as: c\n\nQuestion: What key decisions or action items are mentioned in this document?",
-    "output": "Based on the provided document from arobertshaw regarding 'Eyeforenergy Announces Next European Events', the key information extracted is: Eyeforenergy is pleased to announce the latest in its series of trading\nevents for the energy community.  Taking place from the 19-21st of\nFebruary, 3 key, strategic events will be co-located in Amsterdam\noffering delegates the opportunity to network with all the right people:\n\nEEO Europe: Energy Tr [Source: Document 1]"
-  },
-  {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from lucy.ortiz):\nSubject: Thank you so much!~!~!~!\nKen,\n\nI can't begin to tell you how much I admire you. I still trust you, I still believe in you, I still think you are making the right decisions for the future of this company.\n\nDo you know why?\n\nBecause I absolutely love the Enron that you built.  Enron believed in me.  Enron took a chance on me.  Enron made me into what I am today.  I'm a single mom that started in the back office, worked her way up onto the Weather Derivatives Desk and finally onto the Natural Gas Trading Floor in Energy Ri\n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from lucy.ortiz, the main topic is: Thank you so much!~!~!~!. The key points mentioned are: Ken,\n\nI can't begin to tell you how much I admire you. I still trust you, I still believe in you, I still think you are making the right decisions for the future of this company.\n\nDo you know why?\n\nBe [Source: Email from lucy.ortiz]"
-  },
-  {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from vince.kaminski):\nSubject: Re: Impending Visit\nDale,\n\nSorry for a delay in responding to your message.\nI shall talk to the head of our B2B unit on Friday this week and\nshall remind him about your visit.\n\nI hope he can make a decision at this time whether he is interested\nin pursuing this opportunity\n\nVince\n\n\n\n\n\n\"Dale Nesbitt\" <dale.nesbitt@marketpointinc.com> on 06/27/2000 11:26:05 PM\nTo: \"Vincent Kaminski\" <vkamins@enron.com>, \"Vince. J. Kaminski\"\n<Vince.J.Kaminski@enron.com>\ncc:\nSubject: Impending Visit\n\n\nVince:\n\nI sent you an email a coup\n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from vince.kaminski, the main topic is: Re: Impending Visit. The key points mentioned are: Dale,\n\nSorry for a delay in responding to your message.\nI shall talk to the head of our B2B unit on Friday this week and\nshall remind him about your visit.\n\nI hope he can make a decision at this time  [Source: Email from vince.kaminski]"
-  },
-  {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from kevin.moore):\nSubject: Saturday\nOn Saturday I came to work and did some things that I needed to do.\nAlso, there were some things  left undone that  I felt I should do.\n\nMainly the conference room - We will schedule all birthday's and meetings in\nthe large conference room therefore , I made the room look more spacious.\n\nAlso on Monday - we need to check with the painters too see if they are going\nto repair our walls.\n\nWe also need to get the additional pictures from the cage and get\nthem placed on the wall whereby the move can \n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from kevin.moore, the main topic is: Saturday. The key points mentioned are: On Saturday I came to work and did some things that I needed to do.\nAlso, there were some things  left undone that  I felt I should do.\n\nMainly the conference room - We will schedule all birthday's an [Source: Email from kevin.moore]"
-  },
-  {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the document provided. Cite the source.",
-    "input": "Document 1 (Email from snorenomore):\nSubject: Snoring Keeping You Awake?*Free Melatonin*\nSNORING ROBS MILLIONS OF HOURS OF SLEEP..\n\nThis product has been featured on National TV.\n\nDoes snoring keep you up at night?\nTired of having to sleep in separate rooms because of snoring?\nTired of hearing how your snoring kept someone up all night?\nJust Tired of being tired because of someones snoring?\n\nThere is a safe, natural solution to your snoring problem\n\n*  Works first time, every time\n*  All natural product\n*  No side effects\n*  Guaranteed results\n\nFor more information visit our site : \n\nQuestion: What is the main topic of this email?",
-    "output": "Based on the email from snorenomore, the main topic is: Snoring Keeping You Awake?*Free Melatonin*. The key points mentioned are: SNORING ROBS MILLIONS OF HOURS OF SLEEP..\n\nThis product has been featured on National TV.\n\nDoes snoring keep you up at night?\nTired of having to sleep in separate rooms because of snoring?\nTired of he [Source: Email from snorenomore]"
-  },
-  {
-    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明。回答时引用文档编号。保持专业、简洁。",
-    "input": "\n文档1: 20251231_2221_吴强_凌霄本周计划.txt\nFrom: 吴强 <wuqiang@teamind.cn>\nTo: 赵明 <zhaoming@teamind.cn>, 张伟 <zhangwei@teamind.cn>\n\nCc: 林芳 <linfang@teamind.cn>\nDate: 2025-12-31 22:21:42\nSubject: 凌霄本周计划\nLevel: internal\n\n凌霄的需求文档已更新，主要变更：\n1. 增加了权限过滤的支持\n2. 优化了查询的交互流程\n3. 去掉了旧版导出功能（使用率低于5%）\n请大家01月04日前review反馈。\n\n\n文档2: 20260115_2251_赵明_帮忙看一下凌霄的日志.txt\nFrom: 赵明 <zhaoming@teamind.cn>\nTo: 张伟 <zhangwei@teamind.cn>\nDate: 2026-01-15 22:51:42\nSubject: 帮忙看一下凌霄的日志\nLevel: internal\n\n凌霄的需求文档已更新，主要变更：\n1. 增加了权限过滤的支持\n2. 优化了查询的交互流程\n3. 去掉了旧版导出功能（使用率低于5%）\n请大家01月18日前review反馈。\n\n\n文档3: 20260210_0646_周婷_凌霄本周计划.txt\nFrom: 周婷 <zhouting@teamind.cn>\nTo: 黄涛 <huangtao@teamind.cn>, 马超 <machao@teamind.cn>\n\nCc: 张伟 <zhangwei@teamind.cn>\nDate: 2026-02-10 06:46:42\nSubject: 凌霄本周计划\nLevel: internal\n\n各位，凌霄项目本周计划如下：\n1. 完成凌霄模块的单元测试\n2. 修复上次review发现的几个问题\n3. 准备凌霄的技术分享材料\n4. 对齐马超的需求变更。\n请大家确认各自的任务。\n\n\n问题: 马超和凌霄项目有什么关系？",
-    "output": "根据企业文档，凌霄的需求文档已更新，主要变更：\n1. 增加了权限过滤的支持\n2. 优化了查询的交互流程\n3. 去掉了旧版导出功能（使用率低于5%）\n请大家01月04日前review反馈。; 凌霄的需求文档已更新，主要变更：\n1. 增加了权限过滤的支持\n2. 优化了查询的交互流程\n3. 去掉了旧版导出功能（使用率低于5%）\n请大家01月18日前review反馈。"
-  },
-  {
-    "instruction": "You are an enterprise knowledge assistant. Extract key information from the document.",
-    "input": "Document 1:\nOutlook Migration Team\n05/14/2001 01:02 PM\nTo: Elena Chilkina/Enron@EnronXGate, Jose Marquez/Enron@EnronXGate, Kevin G\nMoore/Enron@EnronXGate, Mike A Roberts/Enron@EnronXGate, Tony\nHamilton/EU/Enron@Enron, William Smith/Enron@EnronXGate, Alan\nMcGaughy/Corp/Enron@ENRON, Dorothy Burrell/GPGFIN/Enron@ENRON, James\nPosway/GPGFIN/Enron@ENRON, Maritta Mullet/GPGFIN/Enron@ENRON, Michael\nMitcham/GPGFIN/Enron@ENRON, Brian Swinford/NA/Enron@Enron, Alan\nJones/GasPlant/TS/ECT@ECT, Bob Brandt/NA/Enron@Enron, \n\nQuestion: What key decisions or action items are mentioned in this document?",
-    "output": "Based on the provided document from sherri.sera regarding 'Re: 2- SURVEY/INFORMATION EMAIL 5-16-01', the key information extracted is: Outlook Migration Team\n05/14/2001 01:02 PM\nTo: Elena Chilkina/Enron@EnronXGate, Jose Marquez/Enron@EnronXGate, Kevin G\nMoore/Enron@EnronXGate, Mike A Roberts/Enron@EnronXGate, Tony\nHamilton/EU/Enron@Enron, William Smith/Enron@EnronXGate, Alan\nMcGaughy/Corp/Enron@ENRON, Dorothy Burrell/GPGFIN/Enron@E [Source: Document 1]"
-  },
-  {
-    "instruction": "You are an enterprise knowledge assistant. Answer based on the contract excerpt provided. Cite the specific clause.",
-    "input": "Contract Excerpt:\nExhibit 10.1 Development Agreement This Development Agreement (the \"Agreement\") dated as of March 20, 2020 (the \"Effective Date\") is entered into by and between CNS Pharmaceuticals, Inc. (\"CNS\"), a Nevada corporation, having a business address of 2100 West Loop South, Suite 900, Houston, Texas 77027, and WPD Pharmaceuticals, (\"WPD\"), a Polish corporation, having a business address of ul. Żwirki i Wigury 101, 02-089 Warszawa. CNS and WPD are sometimes referred to herein individually as a \"Party\" and collectively as the \"Parties.\" RECITALS WHEREAS, WPD is party to a sublicense agreement dated Fe\n\nQuestion: Highlight the parts (if any) of this contract related to \"Governing Law\" that should be reviewed by a lawyer. Details: Which state/country's law governs the interpretation of the contract?",
-    "output": "According to the contract, This Agreement will be governed by, construed and enforced in accordance with the laws of the State of Texas.. [Source: CnsPharmaceuticalsInc_20200326_8-K_EX-10.1_12079626_EX-10.1_Development Agreement clause]"
+    "instruction": "你是企业知识助手。根据以下文档内容回答问题。如果文档中没有相关信息，明确说明'文档中未提及'。回答时引用文档来源。",
+    "input": "文档1:\n主题: 邮件地址变更通知\n\n通知一批邮箱地址发生了变更。邮件地址变更是IT运维中的常见操作，可能源于组织架构调整、域名变更或离职员工清理。\n\n问题: 邮箱地址变更的常见原因是什么？",
+    "output": "根据文档1中的变更通知，一批邮箱地址发生了变更。企业邮箱地址变更的常见原因包括：组织架构调整导致部门归属变更、公司域名更换（如并购后统一域名）、以及离职员工的邮箱清理。及时通知通讯录更新是确保邮件不被发往错误地址的关键。[来源: IT运维通知]"
   }
 ]
