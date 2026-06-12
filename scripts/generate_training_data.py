@@ -144,17 +144,7 @@ def generate_factual_questions(snippets, count=80):
 
 
 def generate_entity_questions(snippets, count=50):
-    """基于实体生成关联型问题。"""
-    from rag.entity_extractor import extract_people, extract_topics
-
-    # 收集所有实体
-    all_people = set()
-    all_topics = set()
-    for snippet in snippets[:100]:
-        entities = extract_people(snippet['text']) if hasattr(extract_people(None), '__call__') else []
-        all_people.update(entities[:5])
-
-    # 硬编码已知的人名和话题（因为 extract 需要模型）
+    """基于实体生成关联型问题。使用硬编码的企业实体。"""
     known_people = ['张伟', '李娜', '王磊', '陈静', '赵明', '刘洋', '周婷', '吴强', '林芳', '马超', '孙悦', '黄涛']
     known_projects = ['凤凰', '昆仑', '泰山', '凌霄', '朱雀']
     known_tech = ['ChromaDB', 'BM25', 'Cross-Encoder', 'AccessGuard', 'W4A8', 'QLoRA', 'LangGraph',

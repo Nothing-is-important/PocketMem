@@ -19,4 +19,6 @@ data/*.sqlite3
 # Session files
 .omo/
 data/
+!data/training_data*.json
+!data/training_data_real*.json
 cuad-qa/
