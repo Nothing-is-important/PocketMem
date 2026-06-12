@@ -94,7 +94,7 @@ print(f"  VectorStore count: {vector_store.count()}")
 # ── Step 5: 检索测试 ──
 print("\n[5] 检索测试...")
 
-results = entity_retriever.search("张三推荐了哪家火锅店？")
+results = entity_retriever.search("凤凰项目技术选型的结论是什么？")
 print(f"  实体感知检索: {len(results)} 条结果")
 if results:
     r = results[0]
@@ -117,7 +117,7 @@ print("  Agent graph 编译成功")
 print("\n[7] Agent 推理测试...")
 
 for query in [
-    "张三推荐了哪家火锅店？",
+    "凤凰项目技术选型的结论是什么？",
     "我的笔记里关于Transformer写了什么？",
     "你好",
 ]:
@@ -156,7 +156,7 @@ assert r.status_code == 200, f"Stats failed: {r.status_code}"
 print(f"  GET /memory/stats: {r.json()}")
 
 # Ask
-r = client.post("/ask", json={"query": "张三推荐了哪家火锅店？"})
+r = client.post("/ask", json={"query": "凤凰项目技术选型的结论是什么？"})
 assert r.status_code == 200, f"Ask failed: {r.status_code}"
 data = r.json()
 print(f"  POST /ask: intent={data['intent']}, answer={data['answer'][:40]}..., latency={data['latency_ms']:.0f}ms")

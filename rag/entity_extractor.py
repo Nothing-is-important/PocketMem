@@ -100,13 +100,13 @@ def extract_people(text: str) -> List[str]:
     people -= noise_words
 
     # 查询中的关键词（不应出现在人名中）
-    query_keywords = {"推荐", "火锅", "火锅店", "团建", "面试", "项目", "笔记", "文档", "方法"}
+    query_keywords = {"项目", "方案", "技术", "合同", "邮件", "会议", "文档", "方法"}
     filtered = set()
     for name in people:
         ok = True
         for kw in query_keywords:
             if kw in name and len(name) > len(kw):
-                # "张三推" 包含 "推荐" → 去除 "推"，保留 "张三"
+                # 实体中包含 query_keyword → 去噪
                 clean = name.replace(kw, "")
                 if len(clean) >= 2:
                     filtered.add(clean)

@@ -33,7 +33,7 @@ def setup_logging(
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(fmt)
 
-    root = logging.getLogger("pocketmemory")
+    root = logging.getLogger("teammind")
     root.setLevel(level)
     root.addHandler(console)
 
@@ -48,5 +48,5 @@ def setup_logging(
 
 
 def get_logger(name: str) -> logging.Logger:
-    """获取以 'pocketmemory' 为根的层级 logger。"""
-    return logging.getLogger(f"pocketmemory.{name}")
+    """获取以 'teammind' 为根的层级 logger。"""
+    return logging.getLogger(f"teammind.{name}")

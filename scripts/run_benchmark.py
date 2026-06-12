@@ -1,4 +1,4 @@
-"""PocketMemory Benchmark 运行脚本。
+"""TeamMind Benchmark 运行脚本。
 
 用法:
     uv run python scripts/run_benchmark.py
@@ -19,7 +19,7 @@ from config import get_settings
 settings = get_settings()
 
 print("=" * 60)
-print("PocketMemory Benchmark")
+print("TeamMind Benchmark")
 print("=" * 60)
 print(f"设备: {settings.device}")
 print(f"Embedding: {settings.embedding_model}")

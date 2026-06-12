@@ -14,36 +14,27 @@ from data_ingestion.time_utils import (
     extract_date_from_query,
     parse_relative_time,
 )
-from data_ingestion.wechat_parser import (
+from data_ingestion.txt_parser import (
     ChatMessage,
     filter_text_messages,
-    parse_wechat_export,
+    parse_text_export,
 )
 
 
-SAMPLE_CHAT = """2026-03-15 14:30:22 张三
-周末有空吗？一起吃个饭？
+SAMPLE_MAIL = """2026-03-15 14:30:22 张伟
+凤凰项目技术选型方案已完成，请审阅。
 
-2026-03-15 14:31:05 我
-好的，周六中午怎么样？
+2026-03-15 14:31:05 李娜
+收到，我下午看完给你反馈。
 
-2026-03-15 14:32:18 张三
-可以，去上次那家火锅店吧，在朝阳区建国路88号
+2026-03-16 09:15:00 王磊
+ChromDB性能测试结果出来了，10万文档延迟<50ms。
 
-2026-03-16 09:15:00 李四
-项目方案我发你邮箱了，你看一下
+2026-03-16 09:20:33 陈静
+客户需求文档已更新，新增了安全合规要求。
 
-2026-03-16 09:20:33 我
-收到，我看完回复你
-
-2026-03-16 15:00:00 张三
-火锅店叫渝味火锅，记得提前订位
-
-2026-04-01 10:00:00 我
-今天请假，身体不舒服
-
-2026-04-02 08:30:00 李四
-团建地点投票：1. 密云水库 2. 古北水镇 3. 十渡
+2026-03-17 15:00:00 周婷
+AccessGuard权限模型设计完成，支持三级文档分级。
 """
 
 
@@ -52,25 +43,25 @@ class TestWechatParser:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False, encoding="utf-8"
         ) as f:
-            f.write(SAMPLE_CHAT)
+            f.write(SAMPLE_MAIL)
             tmp_path = f.name
 
-        messages = parse_wechat_export(tmp_path, chat_name="测试群")
+        messages = parse_text_export(tmp_path, chat_name="测试群")
         Path(tmp_path).unlink()
 
         assert len(messages) >= 7
-        assert messages[0].sender == "张三"
-        assert "火锅" in messages[2].content
+        assert messages[0].sender == "张伟"
+        assert "凤凰" in messages[2].content
         assert all(isinstance(m, ChatMessage) for m in messages)
 
     def test_filter_text_messages(self):
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False, encoding="utf-8"
         ) as f:
-            f.write(SAMPLE_CHAT)
+            f.write(SAMPLE_MAIL)
             tmp_path = f.name
 
-        messages = parse_wechat_export(tmp_path)
+        messages = parse_text_export(tmp_path)
         Path(tmp_path).unlink()
 
         text_msgs = filter_text_messages(messages)
@@ -80,11 +71,11 @@ class TestWechatParser:
         from datetime import datetime
         msg = ChatMessage(
             timestamp=datetime(2026, 3, 15, 14, 30),
-            sender="张三",
+            sender="张伟",
             content="你好",
         )
         text = msg.to_text()
-        assert "张三" in text
+        assert "张伟" in text
         assert "2026" in text
 
 
@@ -93,10 +84,10 @@ class TestConversationChunker:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False, encoding="utf-8"
         ) as f:
-            f.write(SAMPLE_CHAT)
+            f.write(SAMPLE_MAIL)
             tmp_path = f.name
 
-        messages = filter_text_messages(parse_wechat_export(tmp_path))
+        messages = filter_text_messages(parse_text_export(tmp_path))
         Path(tmp_path).unlink()
 
         chunker = ConversationChunker(gap_minutes=30)
@@ -161,7 +152,7 @@ class TestTimeUtils:
         assert result.day == 15
 
     def test_extract_date_relative(self):
-        result = extract_date_from_query("昨天我和张三聊了什么")
+        result = extract_date_from_query("昨天我和张伟聊了什么")
         # "昨天" 应解析出日期
         assert result is not None
 

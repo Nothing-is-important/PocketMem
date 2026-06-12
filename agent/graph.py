@@ -47,7 +47,7 @@ def build_agent_graph(
     hybrid_retriever,
     max_reflect_iterations: int = 1,
 ) -> StateGraph:
-    """构建 PocketMemory Agent 图。
+    """构建 TeamMind Agent 图。
 
     节点自动被 Hook 系统包装，支持在 4 个挂载点扩展功能。
     """

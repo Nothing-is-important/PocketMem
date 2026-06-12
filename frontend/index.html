@@ -608,8 +608,7 @@ body {
       <span class="header-logo">🔍 TeamMind</span>
     </div>
     <div class="header-right">
-      <span v-if="wechatStatus.running" class="badge badge-online" :title="wechatStatus.hint">💬 微信在线</span>
-      <span v-else class="badge badge-offline">💬 微信离线</span>
+      <span class="badge badge-online">🏢 企业知识库</span>
     </div>
   </div>
 
@@ -623,18 +622,9 @@ body {
       <button class="sidebar-btn" @click="scanSources" :disabled="scanning">
         {{ scanning ? '⏳ 扫描中' : '🔍 扫描' }}
       </button>
-      <button
-        v-if="wechatStatus.can_import"
-        class="sidebar-btn primary"
-        @click="importWechat"
-        :disabled="importing"
-      >{{ importing ? '⏳ 导入中' : '📥 微信导入' }}</button>
     </div>
     <div class="sidebar-status">
-      <span v-if="importResult" :class="importResult.includes('失败') ? 'err' : 'ok'">{{ importResult }}</span>
-      <span v-else-if="scanResult" :class="scanResult.error ? 'err' : 'ok'">{{ scanResult.error || scanResult.msg }}</span>
-      <!-- 微信导入进度 -->
-      <div v-if="importing && importProgress.total" class="import-progress">
+      <span v-if="scanResult" :class="scanResult.error ? 'err' : 'ok'">{{ scanResult.error || scanResult.msg }}</span>
         <div class="import-bar">
           <div class="import-bar-fill" :style="{ width: (importProgress.total ? importProgress.done / importProgress.total * 100 : 0) + '%' }"></div>
         </div>
@@ -655,22 +645,10 @@ body {
           </template>
           <div v-else class="sidebar-empty-inline">暂无本地文件</div>
         </div>
-        <!-- 从微信导入 -->
-        <div class="sidebar-section">
-          <div class="sidebar-list-header">💬 从微信导入 ({{ wechatSources.length }})</div>
-          <template v-if="wechatSources.length">
-            <div v-for="s in wechatSources" :key="s.name" class="source-item">
-              <span class="source-icon">💬</span>
-              <span class="source-name" :title="s.name">{{ s.name }}</span>
-              <span class="source-chunks">{{ s.chunk_count }}</span>
-            </div>
-          </template>
-          <div v-else class="sidebar-empty-inline">暂无微信导入数据</div>
-        </div>
       </template>
       <div v-if="!sources.length" class="sidebar-empty">
-        暂无数据源<br>
-        将微信导出的 <code>.txt</code> 放入<br>
+        暂无企业数据<br>
+        将邮件/合同/文档放入<br>
         <code>{{ watchDir }}</code><br>
         后点击扫描
       </div>
@@ -775,7 +753,6 @@ createApp({
       suggestions: [],  // 动态加载，基于已索引数据生成
       sources: [], totalChunks: 0, watchDir: '',
       scanning: false, scanResult: null,
-      wechatStatus: { running: false, wxid: null, hint: '', can_import: false },
       importing: false, importResult: '',
       importProgress: { files: [], current: '', stage: '', done: 0, total: 0 },
       thinkingMsg: null,
@@ -793,16 +770,12 @@ createApp({
   },
   computed: {
     localSources() {
-      return this.sources.filter(s => s.type !== 'wechat');
-    },
-    wechatSources() {
-      return this.sources.filter(s => s.type === 'wechat');
+      return this.sources;
     },
   },
   mounted() {
     this.checkHealth();
     this.loadWatchDir();
-    this.checkWechatStatus();
     this.loadSources();
     this.loadSuggestions();
   },
@@ -851,21 +824,6 @@ createApp({
         this.watchDir = d.watch_dir || 'data/raw';
       } catch {
         this.watchDir = 'data/raw';
-      }
-    },
-    async checkWechatStatus() {
-      try {
-        const r = await fetch('/wechat/status');
-        const d = await r.json();
-        this.wechatStatus = {
-          running: d.running || false,
-          wxid: d.wxid || null,
-          hint: d.hint || '',
-          can_import: d.can_import || false,
-          msg_dbs: d.msg_dbs || [],
-        };
-      } catch {
-        this.wechatStatus = { running: false, wxid: null, hint: '', can_import: false };
       }
     },
     async loadSources() {
@@ -924,82 +882,6 @@ createApp({
         this.scanning = false;
       }
     },
-    async importWechat() {
-      this.importing = true;
-      this.importResult = '';
-      this.importProgress = { files: [], current: '', stage: '', done: 0, total: 0 };
-      try {
-        const response = await fetch('/wechat/import', { method: 'POST' });
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (!line.startsWith('data:')) continue;
-            const data = line.substring(5).trim();
-            if (!data) continue;
-            try {
-              const evt = JSON.parse(data);
-              switch (evt.event) {
-                case 'db_error':
-                  this.importResult = evt.error || '数据库导入失败';
-                  this.importProgress.stage = evt.error || '失败';
-                  break;
-                case 'db_fallback':
-                  this.importResult = '密钥提取失败，降级扫描 TXT 文件...';
-                  this.importProgress.stage = '降级中...';
-                  break;
-                case 'db_diagnostics':
-                  // 显示诊断信息
-                  this.importResult = (evt.diagnostics || []).join('; ');
-                  this.importProgress.stage = evt.diagnostics ? evt.diagnostics[0] : '诊断中...';
-                  break;
-                case 'discover':
-                  this.importProgress.files = evt.files || [];
-                  this.importProgress.total = evt.count || 0;
-                  this.importProgress.stage = `发现 ${evt.count} 个文件`;
-                  break;
-                case 'file_start':
-                  this.importProgress.current = evt.file;
-                  this.importProgress.stage = '解析中...';
-                  break;
-                case 'parse_done':
-                  this.importProgress.stage = `解析完成 (${evt.messages} 条消息)`;
-                  break;
-                case 'index_done':
-                  this.importProgress.stage = `索引完成 (${evt.chunks} 个片段)`;
-                  break;
-                case 'file_done':
-                  this.importProgress.done++;
-                  this.importProgress.stage = '完成';
-                  break;
-                case 'file_error':
-                  this.importProgress.stage = '失败';
-                  this.importResult = `${evt.file}: ${evt.error}`;
-                  break;
-                case 'complete':
-                  this.importResult = evt.message || '导入完成';
-                  this.importProgress.stage = '全部完成';
-                  this.loadSources();
-                  this.loadSuggestions();
-                  break;
-              }
-            } catch { /* skip malformed JSON */ }
-          }
-        }
-      } catch (e) {
-        this.importResult = '失败: ' + e.message;
-      } finally {
-        this.importing = false;
-      }
-    },
-
     // ── Pipeline helpers ──
     resetPipeline() {
       this.pipelineNodes.forEach(n => { n.status = ''; n.latency = null; });

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from .wechat_parser import ChatMessage
+from .txt_parser import ChatMessage
 
 
 @dataclass
@@ -234,7 +234,7 @@ class ConversationChunker:
                 "session_idx": session_idx,
                 "chunk_index": chunk_idx,
                 "source_file": source_file,
-                "source_type": "wechat",
+                "source_type": "mail",
                 "participants": participants,
                 "participant_count": len(participants),
                 "timestamp": timestamps[0].isoformat() if timestamps else "",

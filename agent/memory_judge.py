@@ -1,4 +1,4 @@
-"""MemoryRelevance Judge —— 个人记忆相关性判断。
+"""MemoryRelevance Judge —— 检索结果相关性判断。
 
 与 Evidence Judge 的区别：
 - 所有个人数据受信任，不需要信源标注

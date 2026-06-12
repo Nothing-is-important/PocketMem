@@ -1,4 +1,4 @@
-"""PocketMemory —— 端侧个人记忆助手 Agent。
+"""TeamMind —— 端侧企业知识助手。
 
 启动 FastAPI 服务：
     python main.py
@@ -15,7 +15,7 @@ from config import get_settings
 
 def main():
     settings = get_settings()
-    print(f"Starting PocketMemory server on {settings.server_host}:{settings.server_port}")
+    print(f"Starting TeamMind server on {settings.server_host}:{settings.server_port}")
     uvicorn.run(
         "api.server:app",
         host=settings.server_host,

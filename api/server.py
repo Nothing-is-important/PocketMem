@@ -1,4 +1,4 @@
-"""FastAPI 服务 —— PocketMemory REST API。
+"""FastAPI 服务 —— TeamMind REST API。
 
 端点：
 - POST /ask           同步问答
@@ -43,8 +43,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="PocketMemory",
-    description="端侧个人记忆助手 Agent API",
+    title="TeamMind",
+    description="端侧企业知识助手 API",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -74,7 +74,7 @@ async def index():
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
-    return {"message": "PocketMemory API", "docs": "/docs"}
+    return {"message": "TeamMind API", "docs": "/docs"}
 
 
 @app.get("/health")
@@ -302,7 +302,7 @@ async def list_sources(request: Request):
 async def ingest_data(req: IngestRequest, request: Request):
     """扫描数据目录并索引新发现的数据源。
 
-    支持微信桌面版导出 TXT、Markdown 笔记、PDF 文档。
+    支持企业邮件、Markdown 文档、PDF 文件。
     已索引的文件会自动跳过（增量索引）。
     """
     source_mgr = getattr(request.app.state, "source_manager", None)
@@ -328,14 +328,14 @@ async def ingest_data(req: IngestRequest, request: Request):
 
 @app.get("/data/watched")
 async def watched_directory(request: Request):
-    """返回监控目录路径——用户应该把微信导出文件放在这里。"""
+    """返回监控目录路径——企业数据文件放在这里。"""
     source_mgr = getattr(request.app.state, "source_manager", None)
     if source_mgr is None:
         raise HTTPException(status_code=503, detail="Source manager not initialized")
     return {
         "watch_dir": source_mgr.watch_dir(),
         "supported_formats": {
-            ".txt": "微信桌面版导出 TXT（聊天记录右键→导出）",
+            ".txt": "企业邮件 TXT（From/To/Subject 格式）",
             ".md": "Markdown 笔记文件",
             ".pdf": "PDF 文档",
         },
@@ -667,69 +667,3 @@ async def clear_logs():
     return {"status": "cleared"}
 
 
-# ═══════════════════════════════════════════════════════════
-# 微信状态端点
-# ═══════════════════════════════════════════════════════════
-
-@app.get("/wechat/status")
-async def wechat_status():
-    """检测微信运行状态和可导入数据。
-
-    Returns:
-        {
-            "running": true,
-            "wxid": "wxid_xxx",
-            "data_dir": "C:/Users/.../WeChat Files/wxid_xxx",
-            "msg_dbs": ["MSG0.db"],
-            "can_import": true,
-            "hint": "微信运行中 · wxid_xxx · 发现 1 个消息数据库 (52MB)"
-        }
-    """
-    from data_ingestion.wechat_detector import get_wechat_status
-    return get_wechat_status()
-
-
-@app.post("/wechat/import")
-async def wechat_import_stream(request: Request):
-    """导入微信聊天记录 —— SSE 流式进度报告。
-
-    优先尝试数据库解密导入（需要微信登录 + 管理员权限），
-    降级为扫描 data/raw/ 中的 .txt 导出文件。
-    """
-    source_mgr = getattr(request.app.state, "source_manager", None)
-    pipeline = getattr(request.app.state, "pipeline", None)
-    indexer = getattr(request.app.state, "indexer", None)
-
-    if source_mgr is None or pipeline is None or indexer is None:
-        raise HTTPException(status_code=503, detail="Ingestion components not initialized")
-
-    async def event_generator():
-        from data_ingestion.wechat_importer import WechatImporter
-        import asyncio
-
-        importer = WechatImporter(pipeline=pipeline, indexer=indexer)
-        watch_dir = source_mgr.watch_dir()
-
-        # 先尝试数据库解密导入
-        db_imported = False
-        db_error = False
-        for progress in importer.import_from_database(watch_dir):
-            if progress.get("event") == "db_key_ok":
-                db_imported = True
-            elif progress.get("event") == "db_error":
-                db_error = True
-                yield {"data": json.dumps(progress)}
-                break
-            yield {"data": json.dumps(progress)}
-            await asyncio.sleep(0.05)
-
-        if not db_imported and not db_error:
-            # 只在没有错误时降级到 TXT
-            for progress in importer.import_from_directory(watch_dir):
-                yield {"data": json.dumps(progress)}
-                await asyncio.sleep(0.05)
-
-        # 导入完成后刷新来源列表缓存
-        invalidate_suggestion_cache()
-
-    return EventSourceResponse(event_generator())

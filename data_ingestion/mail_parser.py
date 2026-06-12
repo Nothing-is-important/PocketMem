@@ -5,7 +5,7 @@
 - EML/MIME（标准邮件格式，待扩展）
 - MSG（Outlook 格式，待扩展）
 
-解析为标准 ChatMessage，与现有 WeChat 解析器保持一致的接口，
+解析为标准 ChatMessage，与现有文本解析器保持一致的接口，
 便于统一索引。
 """
 
@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from .chunker import ConversationChunker, DocumentChunk
-from .wechat_parser import ChatMessage
+from .txt_parser import ChatMessage
 
 
 def parse_mail_file(filepath: str) -> List[ChatMessage]:

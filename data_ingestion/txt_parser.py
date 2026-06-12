@@ -1,6 +1,6 @@
-"""微信聊天记录导出解析器。
+"""文本消息解析器。
 
-支持微信桌面版导出的 TXT 格式：
+支持企业邮件和聊天记录导出的 TXT 格式：
     YYYY-MM-DD HH:MM:SS SenderName
     Message content (single or multi-line)
 
@@ -55,12 +55,12 @@ _MEDIA_PATTERN = re.compile(
 )
 
 
-def parse_wechat_export(filepath: str, chat_name: str = "") -> List[ChatMessage]:
-    """解析微信导出的聊天记录 TXT 文件。
+def parse_text_export(filepath: str, chat_name: str = "") -> List[ChatMessage]:
+    """解析文本导出的聊天记录 TXT 文件。
 
     Args:
-        filepath: 微信导出 TXT 文件路径
-        chat_name: 聊天对象名称（如"张三"或"技术交流群"），
+        filepath: 文本导出 TXT 文件路径
+        chat_name: 聊天对象名称（如"张伟"或"技术讨论组"），
                    不提供时从文件名推断
 
     Returns:

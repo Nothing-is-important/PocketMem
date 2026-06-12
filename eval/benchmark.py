@@ -1,4 +1,4 @@
-"""PocketMemory 评估框架。
+"""TeamMind 评估框架。
 
 对比指标：
 - retrieval recall@5 / MRR

@@ -1,4 +1,4 @@
-"""PocketMemory 演示脚本。"""
+"""TeamMind 演示脚本。"""
 
 import sys
 from pathlib import Path
@@ -105,7 +105,7 @@ def setup():
             src = chunk.metadata.get("source_file", "")
             file_chunk_counts[src] = file_chunk_counts.get(src, 0) + 1
 
-        # 后缀 → 类型映射（demo 目录下的 .txt 为本地聊天记录，不是微信导入）
+        # 后缀 → 类型映射
         _suffix_type_map = {".txt": "text", ".md": "markdown", ".markdown": "markdown", ".pdf": "pdf"}
 
         for f in demo_dir_path.rglob("*"):
@@ -114,7 +114,7 @@ def setup():
                 count = file_chunk_counts.get(fpath, 0)
                 source_type = _suffix_type_map.get(f.suffix, "text")
                 source_mgr.mark_indexed(fpath, chunk_count=count, source_type=source_type)
-    # 同时扫描 data/raw 目录（用户放置真实微信导出的地方）
+    # 同时扫描 data/raw 目录（用户放置企业数据的地方）
     raw_sources = source_mgr.scan()
     if raw_sources:
         new_result = source_mgr.ingest_new(pipeline=pipeline, indexer=indexer)
@@ -186,11 +186,11 @@ def setup():
 def run_preset_queries(agent_graph):
     """运行预设演示查询。"""
     queries = [
-        "张三推荐的那家火锅店叫什么？在哪里？",
-        "关于团建，大家都讨论了什么方案？",
-        "我的笔记里关于Transformer架构写了什么？",
-        "端侧推理优化有哪些方法？",
-        "李四面试拿了哪家公司的offer？",
+        "凤凰项目技术选型的结论是什么？",
+        "W4A8量化的效果怎么样？",
+        "AccessGuard的设计方案是什么？",
+        "ChromaDB和Elasticsearch对比，哪个更适合中小企业？",
+        "凤凰项目的安全评估发现了什么问题？",
     ]
 
     for query in queries:
@@ -212,7 +212,7 @@ def run_preset_queries(agent_graph):
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="PocketMemory 演示")
+    parser = argparse.ArgumentParser(description="TeamMind 演示")
     parser.add_argument("--once", action="store_true", help="运行预设查询并退出")
     parser.add_argument("--serve", action="store_true", help="启动 FastAPI 服务")
     parser.add_argument("--backend", default=None, choices=["local_simulate", "vllm"],
@@ -224,7 +224,7 @@ def main():
         import os
         os.environ["POCKET_BACKEND"] = args.backend
 
-    print("初始化 PocketMemory...")
+    print("初始化 TeamMind...")
     components = setup()
 
     if args.once:

@@ -1,7 +1,7 @@
 """数据源管理器 —— 自动发现、格式检测、增量索引。
 
 支持的格式：
-    - 微信桌面版导出 TXT（时间戳 + 发送者 + 消息）
+    - 企业邮件 TXT（From/To/Subject 格式）
     - Markdown 笔记文件
     - PDF 文档
 
@@ -25,14 +25,11 @@ logger = get_logger("sources")
 
 # 支持的文件扩展名 → 类型映射
 FORMAT_MAP = {
-    ".txt": "wechat",
+    ".txt": "mail",
     ".md": "markdown",
     ".markdown": "markdown",
     ".pdf": "pdf",
 }
-
-# 微信导出格式的特征行（用于格式检测）
-WECHAT_SIGNATURE = "202"  # 微信消息行以时间戳开头，如 "2026-03-15 14:30:22"
 
 
 class SourceManager:
@@ -40,7 +37,7 @@ class SourceManager:
 
     职责：
     - 扫描数据目录，发现支持的文件
-    - 格式检测（微信 TXT vs 普通 TXT）
+    - 格式检测（邮件 TXT vs 普通 TXT）
     - 增量索引（只索引新文件或修改过的文件）
     - 数据源统计（哪个文件有多少条消息）
     """
@@ -64,7 +61,7 @@ class SourceManager:
         """扫描目录，返回所有支持的文件及其元数据。
 
         Returns:
-            [{"path": "...", "name": "...", "type": "wechat", "size": 12345, "preview": "..."}, ...]
+            [{"path": "...", "name": "...", "type": "mail", "size": 12345, "preview": "..."}, ...]
         """
         target = Path(directory) if directory else self._raw_dir
         if not target.exists():
@@ -97,10 +94,9 @@ class SourceManager:
                 preview = f.read(500)
 
             # 格式验证
-            if source_type == "wechat":
-                detected = self._detect_wechat_format(preview)
-                if not detected:
-                    return None  # 不是微信格式的 TXT，跳过
+            if source_type == "mail":
+                # 邮件格式由 pipeline 自动检测
+                pass
             elif source_type == "markdown":
                 if not preview.strip().startswith("#") and "##" not in preview[:200]:
                     source_type = "text"  # 可能是普通文本
@@ -119,24 +115,8 @@ class SourceManager:
             logger.warning("Failed to inspect %s: %s", file_path, e)
             return None
 
-    def _detect_wechat_format(self, preview: str) -> bool:
-        """检测是否是微信导出格式：前几行中是否有时间戳+发送者的模式。"""
-        lines = [l.strip() for l in preview.split("\n") if l.strip()]
-        match_count = 0
-        for line in lines[:10]:
-            # 微信格式: "2026-03-15 14:30:22 发送者名"
-            if len(line) > 20 and line[:4].startswith("20"):
-                parts = line.split(" ", 3)
-                if len(parts) >= 3 and ":" in parts[1]:
-                    match_count += 1
-        return match_count >= 2  # 至少 2 行匹配才算微信格式
-
     def _count_messages(self, preview: str, source_type: str) -> int:
         """估算消息条数。"""
-        if source_type == "wechat":
-            return sum(1 for line in preview.split("\n")
-                      if len(line) > 20 and line[:4].startswith("20")
-                      and ":" in line[10:20])
         return 0
 
     def _content_hash(self, file_path: str) -> str:
