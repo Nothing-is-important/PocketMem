@@ -53,10 +53,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
 .sources{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px}
-.source-tag{padding:2px 8px;border-radius:10px;font-size:11px;background:rgba(88,166,255,0.1);color:var(--accent);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cite-ref{color:var(--accent);cursor:pointer;font-size:12px;font-weight:600;text-decoration:none;padding:0 1px;transition:.2s}
-.cite-ref:hover{text-decoration:underline;background:rgba(88,166,255,0.15);border-radius:2px}
-.source-popup{position:fixed;z-index:999;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:12px;max-width:350px;color:var(--text);box-shadow:0 4px 12px rgba(0,0,0,.3);pointer-events:none}
+.ref-list{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px}
+.ref-item{padding:3px 10px;border-radius:6px;font-size:12px;background:rgba(88,166,255,0.08);color:var(--accent);cursor:pointer;transition:.2s}
+.ref-item:hover{background:rgba(88,166,255,0.18)}
 .thinking-indicator{color:var(--text2);font-size:14px}
 .dot-anim i{animation:dotBounce 1.4s infinite both;font-style:normal}
 .dot-anim i:nth-child(2){animation-delay:.2s}
@@ -123,19 +122,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
         <div v-for="(msg,idx) in messages" :key="idx" :class="['msg',msg.role]">
           <div v-if="msg.role==='assistant' && (msg.thinking || msg._thinkingStream != null)" class="think-block">
-            <div class="think-label">💭 思考过程<span v-if="msg.thinkMs != null"> ({{ msg.thinkMs }}ms)</span></div>
+            <details><summary class="think-label">💭 思考过程<span v-if="msg.thinkMs != null"> ({{ msg.thinkMs }}ms)</span></summary>
             <div :class="['think-content',{streaming:msg._thinkingStream}]">{{ msg.thinking || msg._thinkingStream }}</div>
+            </details>
           </div>
           <div class="msg-bubble">
             <span v-if="msg.role==='assistant' && !msg.content && (msg._thinkingStream != null || msg.thinking) && !msg._done" class="thinking-indicator">正在思考<span class="dot-anim"><i>.</i><i>.</i><i>.</i></span></span>
-            <template v-else-if="msg.content">
-              <template v-for="(seg,si) in splitContent(msg)" :key="si">
-                <span v-if="seg.cite" class="cite-ref" @click.stop="openCite(seg.idx,msg)" @mouseenter.stop="showCitePopupEv($event,seg.idx,msg)" @mouseleave.stop="hideSourcePopup">[{{ seg.num }}]</span>
-                <span v-else>{{ seg.text }}</span>
-              </template>
-            </template>
+            <span v-else-if="msg.content">{{ msg.content }}</span>
           </div>
-          <div v-if="showSource && hoveredSource" class="source-popup" :style="popupStyle">{{ hoveredSource.name || hoveredSource.file || '' }}</div>
+          <div v-if="msg.role==='assistant' && msg.sources && msg.sources.length" class="ref-list">
+            <div v-for="(s,si) in msg.sources" :key="si" class="ref-item" @click="openSource(s)">🔗[{{ si+1 }}] {{ fileName(s) }}</div>
+          </div>
           <div class="msg-meta">{{ msg.role==='user'?'你':'TeamMind' }} · {{ msg.time }}<span v-if="msg.role==='assistant' && msg.totalMs != null"> · {{ msg.totalMs }}ms</span></div>
         </div>
 
@@ -164,7 +161,7 @@ const { createApp } = Vue;
 createApp({
   data(){return{
     query:'',loading:false,statusText:'检查连接...',statusDot:'err',
-    messages:[],conversations:[],activeConv:-1,streamingMsg:null,showSource:false,hoveredSource:null,popupStyle:{},
+    messages:[],conversations:[],activeConv:-1,streamingMsg:null,
     pipelineNodes:[
       {id:'router',icon:'🎯',label:'路由',status:'',latency:null},
       {id:'retrieve',icon:'🔍',label:'检索',status:'',latency:null},
@@ -182,10 +179,6 @@ createApp({
     time(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})},
     fileName(s){var f=(s.file||'').replace(/\\/g,'/').split('/').pop();return f||'文档'},
     cleanThink(t){return (t||'').replace(/<\/?think>/g,'').trim()},
-    splitContent(msg){var t=msg.content||'';if(!msg.sources||!msg.sources.length)return[{text:t}];var re=/\[(\d+)\]/g,segs=[],last=0,m;while((m=re.exec(t))!==null){if(m.index>last)segs.push({text:t.slice(last,m.index)});var idx=parseInt(m[1])-1;if(msg.sources[idx])segs.push({cite:true,num:m[1],idx:idx});else segs.push({text:m[0]});last=m.index+m[0].length}if(last<t.length)segs.push({text:t.slice(last)});return segs},
-    showCitePopupEv(e,idx,msg){var s=(msg.sources||[])[idx];if(!s)return;this.hoveredSource={name:this.fileName(s),file:s.file};this.showSource=true;this.popupStyle={left:(e.clientX+12)+'px',top:(e.clientY-10)+'px'}},
-    hideSourcePopup(){this.showSource=false;this.hoveredSource=null},
-    openCite(idx,msg){var s=(msg.sources||[])[idx];if(s)this.openSource(s);this.hideSourcePopup()},
     fmtMs(v){return v!=null?Math.round(v):null},
     openSource(s){var fp=(s.file||'');if(fp)fetch('/open-file?path='+encodeURIComponent(fp)).catch(()=>{})},
     async sendQuery(){
