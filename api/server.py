@@ -212,6 +212,7 @@ async def ask_stream(req: AskRequest, request: Request):
             if gen_state is not None:
                 gen_t0 = time.time()
                 backend = getattr(request.app.state, "backend", None)
+                thinking_text = ""
 
                 if backend and hasattr(backend, 'generate_with_thinking'):
                     from agent.generator import build_thinking_messages
@@ -234,7 +235,7 @@ async def ask_stream(req: AskRequest, request: Request):
                                 yield {"data": json.dumps({"event": "think_token", "data": text})}
                             elif event_type == "answer":
                                 answer_text += text
-                                yield {"data": json.dumps({"event": "generate_token", "data": text})}
+                                yield {"data": json.dumps({"event": "answer_token", "data": text})}
                             await asyncio.sleep(0.005)
                     else:
                         for event_type, text in gen_result:
@@ -246,7 +247,7 @@ async def ask_stream(req: AskRequest, request: Request):
                                 yield {"data": json.dumps({"event": "think_token", "data": text})}
                             elif event_type == "answer":
                                 answer_text += text
-                                yield {"data": json.dumps({"event": "generate_token", "data": text})}
+                                yield {"data": json.dumps({"event": "answer_token", "data": text})}
                             await asyncio.sleep(0.005)
 
                     # 更新 state 用于 hook
@@ -258,8 +259,20 @@ async def ask_stream(req: AskRequest, request: Request):
                     prompt = build_generator_prompt(gen_state)
                     gen_state["final_answer"] = backend.generate(prompt, max_tokens=2048)
 
+                # 思考结束事件
+                if thinking_text.strip():
+                    yield {"data": json.dumps({"event": "think_end", "data": ""})}
+
                 gen_latency = (time.time() - gen_t0) * 1000
                 gen_state["latency_stats"]["generate_ms"] = gen_latency
+
+                # 来源引用
+                sources = gen_state.get("memory_context", [])
+                if sources:
+                    yield {"data": json.dumps({"event": "sources", "data": [
+                        {"content": s.get("content", "")[:200]} for s in sources[:5]
+                    ]})}
+
                 yield {"data": json.dumps({"event": "generate", "data": "", "latency_ms": gen_latency})}
 
                 # 手动触发 post_generate hook（用户画像记录）
