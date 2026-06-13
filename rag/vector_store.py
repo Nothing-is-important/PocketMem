@@ -179,10 +179,17 @@ def _sanitize_metadata(metadata: Dict) -> Dict:
 def _format_results(results) -> List[Dict]:
     """将 ChromaDB 返回格式转为统一的字典列表。"""
     formatted = []
-    ids = results.get("ids", [[]])[0]
-    docs = results.get("documents", [[]])[0]
-    metas = results.get("metadatas", [[]])[0]
+    raw_ids = results.get("ids", [[]])
+    raw_docs = results.get("documents", [[]])
+    raw_metas = results.get("metadatas", [[]])
+    ids = raw_ids[0] if raw_ids else []
+    docs = raw_docs[0] if raw_docs else []
+    metas = raw_metas[0] if raw_metas else []
     distances = results.get("distances", [[]])[0]
+
+    # DEBUG
+    from utils import log_file
+    log_file(f"  [_format] ids#={len(ids)}, metas#={len(metas)}, first_meta_keys={list(metas[0].keys()) if metas else 'EMPTY'}")
 
     for i in range(len(ids)):
         # 余弦距离 → 相似度分数（距离 0 = 完全相似）
