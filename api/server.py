@@ -299,6 +299,11 @@ async def ask_stream(req: AskRequest, request: Request):
                 # 来源引用
                 sources = gen_state.get("memory_context", [])
                 if sources:
+                    # DEBUG: 打印第一个source的所有metadata key
+                    if sources:
+                        meta_keys = list(sources[0].get("metadata", {}).keys())
+                        print(f"[DEBUG sources] metadata keys: {meta_keys}")
+                        print(f"[DEBUG sources] sample meta: { {k:str(v)[:60] for k,v in list(sources[0].get('metadata',{}).items())[:8]} }")
                     yield {"data": json.dumps({"event": "sources", "data": [
                         _build_source_item(s) for s in sources[:5]
                     ]})}
@@ -463,12 +468,18 @@ async def refresh_suggestions(request: Request):
 def _build_source_item(s):
     """构建来源项，确保 file 和 name 字段非空。"""
     meta = s.get("metadata", {})
-    file = meta.get("source_file", "") or meta.get("file_name", "") or ""
+    content = s.get("content", "")[:200]
+    # 多级 fallback 找文件名
+    file = (meta.get("source_file") or meta.get("file_name") or
+            meta.get("title") or meta.get("source") or "")
+    name = ""
     if file:
-        name = file.replace("\\", "/").split("/")[-1]
-    else:
-        name = meta.get("title", "") or meta.get("file_name", "") or "文档"
-    return {"content": s.get("content", "")[:200], "file": file or name, "name": name}
+        name = file.replace("\\", "/").split("/")[-1] if "/" in file or "\\" in file else file
+    if not name:
+        name = "文档-" + (s.get("id", "") or "")[:8]
+    if not file:
+        file = name
+    return {"content": content, "file": file, "name": name}
 
 
 def invalidate_suggestion_cache():
