@@ -82,7 +82,7 @@ def setup():
     pipeline = IngestionPipeline()
     indexer = Indexer(vector_store, bm25)
 
-    all_chunks = pipeline.ingest_directory(settings.demo_data_dir)
+    all_chunks = pipeline.ingest_directory(settings.demo_data_dir, exclude=["enron_cn"])
     all_chunks = pipeline.deduplicate(all_chunks)
     indexed = indexer.index(all_chunks)
 

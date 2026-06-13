@@ -84,26 +84,32 @@ class IngestionPipeline:
         from .mail_parser import load_mail
         return load_mail(filepath, self.chunker)
 
-    def ingest_directory(self, dirpath: str) -> List[DocumentChunk]:
+    def ingest_directory(self, dirpath: str, exclude: list = None) -> List[DocumentChunk]:
         """摄取目录中所有支持的文件。
 
         Args:
             dirpath: 目录路径
+            exclude: 要跳过的子目录名列表
 
         Returns:
             DocumentChunk 列表
         """
         path = Path(dirpath)
+        exclude = exclude or []
         if not path.is_dir():
             raise NotADirectoryError(f"目录不存在: {dirpath}")
 
         all_chunks = []
         for ext in SUPPORTED_EXTENSIONS:
             for file_path in path.rglob(f"*{ext}"):
+                # 跳过要排除的子目录
+                if any(ex in file_path.parts for ex in exclude):
+                    continue
                 try:
                     chunks = self.ingest(str(file_path))
                     all_chunks.extend(chunks)
-                    print(f"  [OK] {file_path.name}: {len(chunks)} chunks")
+                    if chunks:
+                        print(f"  [OK] {file_path.name}: {len(chunks)} chunks")
                 except Exception as e:
                     print(f"  ✗ {file_path.name}: {e}")
 
