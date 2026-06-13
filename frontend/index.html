@@ -112,7 +112,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     <div class="main-col">
-      <div class="chat" ref="chatContainer">
+      <div class="chat" ref="chatContainer" @click="onChatClick" @mouseover="onChatHover" @mouseout="onChatOut">
         <div v-if="!messages.length" class="empty-state">
           <div class="icon">🏢</div>
           <p>企业知识库已就绪</p>
@@ -168,12 +168,7 @@ createApp({
     ],
     quickQueries:['凤凰项目技术选型结论？','W4A8量化效果如何？','AccessGuard权限模型？','ChromaDB和ES怎么选？','Cross-Encoder提升？','系统安全评估发现了什么？','昆仑项目GPU成本？'],
   }},
-  mounted(){this.checkHealth();this.newConversation();
-    var self=this;
-    this.$refs.chatContainer.addEventListener('mouseover',function(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var msgEl=el.closest('.msg');var msgs=self.messages;for(var i=msgEl.parentNode.children.length-1;i>=0;i--){if(msgEl.parentNode.children[i]===msgEl){var msg=msgs[i];if(msg&&msg.sources&&!isNaN(idx))self.showCitePopup(e,idx,msg);break}}})
-    this.$refs.chatContainer.addEventListener('mouseout',function(e){if(e.target.closest('.cite-ref'))self.hideSourcePopup()})
-    this.$refs.chatContainer.addEventListener('click',function(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var msgEl=el.closest('.msg');var msgs=self.messages;for(var i=msgEl.parentNode.children.length-1;i>=0;i--){if(msgEl.parentNode.children[i]===msgEl){var msg=msgs[i];if(msg&&msg.sources&&!isNaN(idx)){self.openCite(idx,msg);break}}}})
-  },
+  mounted(){this.checkHealth();this.newConversation()},
   methods:{
     newConversation(){this.messages=[];this.resetPipeline();this.conversations.unshift({title:'新对话',time:this.time(),messages:[]});this.activeConv=0;this.streamingMsg=null},
     switchConv(i){const c=this.conversations[i];if(!c)return;this.messages=c.messages;this.activeConv=i},
@@ -182,10 +177,13 @@ createApp({
     time(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})},
     fileName(s){var f=(s.file||'').replace(/\\/g,'/').split('/').pop();return f||'文档'},
     cleanThink(t){return (t||'').replace(/<\/?think>/g,'').trim()},
-    renderCitations(msg){var t=msg.content||'';if(!msg.sources||!msg.sources.length)return t.replace(/</g,'&lt;');return t.replace(/\[(\d+)\]/g,function(m,num){var idx=parseInt(num)-1;var s=msg.sources[idx];if(!s)return m;return'<span class="cite-ref" data-idx="'+idx+'">['+num+']</span>'})},
+    renderCitations(msg){var t=msg.content||'';if(!msg.sources||!msg.sources.length)return t.replace(/</g,'&lt;');var midx=this.messages.indexOf(msg);return t.replace(/\[(\d+)\]/g,function(m,num){var idx=parseInt(num)-1;var s=msg.sources[idx];if(!s)return m;return'<span class="cite-ref" data-idx="'+idx+'" data-midx="'+midx+'">['+num+']</span>'})},
     showCitePopup(e,idx,msg){var s=(msg.sources||[])[idx];if(!s)return;this.hoveredSource={name:this.fileName(s),file:s.file};this.showSource=true;this.popupStyle={left:(e.clientX+12)+'px',top:(e.clientY-10)+'px'}},
     hideSourcePopup(){this.showSource=false;this.hoveredSource=null},
-    openCite(idx,msg){var s=(msg.sources||[])[idx];if(s)this.openSource(s)},
+    openCite(idx,msg){var s=(msg.sources||[])[idx];if(s)this.openSource(s);this.hideSourcePopup()},
+    onChatClick(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var midx=parseInt(el.dataset.midx);if(!isNaN(idx)&&!isNaN(midx)){var msg=this.messages[midx];if(msg)this.openCite(idx,msg)}},
+    onChatHover(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var midx=parseInt(el.dataset.midx);if(!isNaN(idx)&&!isNaN(midx)){var msg=this.messages[midx];if(msg)this.showCitePopup(e,idx,msg)}},
+    onChatOut(e){if(e.target.closest('.cite-ref'))this.hideSourcePopup()},
     fmtMs(v){return v!=null?Math.round(v):null},
     openSource(s){var fp=(s.file||'');if(fp)fetch('/open-file?path='+encodeURIComponent(fp)).catch(()=>{})},
     async sendQuery(){
