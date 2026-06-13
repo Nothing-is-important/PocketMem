@@ -91,15 +91,7 @@ class VectorStore:
         top_k: int = 10,
         where: Optional[Dict] = None,
     ) -> List[Dict]:
-        """语义检索。
-
-        用自定义 embedding 函数预计算查询向量，
-        避免 ChromaDB 内部 embed_query 接口兼容问题。
-        """
-        if self._embedding_fn:
-            query_emb = self._embedding_fn([query])[0]
-            return self.search_by_embedding(query_emb, top_k, where)
-
+        """语义检索。"""
         results = self._collection.query(
             query_texts=[query],
             n_results=top_k,
@@ -121,6 +113,12 @@ class VectorStore:
             where=where,
             include=["documents", "metadatas", "distances"],
         )
+        # DEBUG: check raw ChromaDB response
+        from utils import log_file
+        raw_m = results.get("metadatas", [])
+        log_file(f"  [search_by_emb] raw metas type={type(raw_m)}, len={len(raw_m) if raw_m else 0}")
+        if raw_m and raw_m[0]:
+            log_file(f"  [search_by_emb] first meta: {list(raw_m[0][0].keys()) if raw_m[0][0] else 'None'}")
 
         return _format_results(results)
 
