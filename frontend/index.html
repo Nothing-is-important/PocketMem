@@ -79,6 +79,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text2)}
 .empty-state .icon{font-size:40px}
 .empty-state p{font-size:14px;max-width:400px;text-align:center;line-height:1.6}
+.quick-queries{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:500px}
+.quick-q{padding:8px 16px;border-radius:8px;font-size:13px;background:var(--surface);color:var(--text2);cursor:pointer;border:1px solid var(--border);transition:.2s}
+.quick-q:hover{border-color:var(--accent);color:var(--text)}
 
 @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 </style>
@@ -104,18 +107,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="chat" ref="chatContainer">
         <div v-if="!messages.length" class="empty-state">
           <div class="icon">🏢</div>
-          <p>企业知识库已就绪。试试问：<br>"凤凰项目技术选型的结论是什么？"</p>
+          <p>企业知识库已就绪</p>
+          <div class="quick-queries">
+            <span v-for="q in quickQueries" :key="q" class="quick-q" @click="query=q;sendQuery()">{{ q }}</span>
+          </div>
         </div>
 
         <div v-for="(msg,idx) in messages" :key="idx" :class="['msg',msg.role]">
           <div v-if="msg.role==='assistant' && (msg.thinking || msg._thinkingStream)" class="think-block">
-            <details :open="!!msg._thinkingStream"><summary class="think-label">💭 思考过程<span v-if="msg.thinkMs != null"> ({{ msg.thinkMs }}ms)</span></summary>
-              <div :class="['think-content',{streaming:msg._thinkingStream}]">{{ msg.thinking || msg._thinkingStream }}</div>
-            </details>
+            <div class="think-label">💭 思考过程<span v-if="msg.thinkMs != null"> ({{ msg.thinkMs }}ms)</span></div>
+            <div :class="['think-content',{streaming:msg._thinkingStream}]">{{ msg.thinking || msg._thinkingStream }}</div>
           </div>
           <div class="msg-bubble">{{ msg.content || '思考中...' }}</div>
           <div v-if="msg.sources && msg.sources.length" class="sources">
-            <span v-for="(s,si) in msg.sources" :key="si" class="source-tag" @click="openSource(s)" style="cursor:pointer">📁 {{ fileName(s) }}</span>
+            <span v-for="(s,si) in msg.sources" :key="si" class="source-tag" @click="openSource(s)" style="cursor:pointer">🔗 {{ fileName(s) }}</span>
           </div>
           <div class="msg-meta">{{ msg.role==='user'?'你':'TeamMind' }} · {{ msg.time }}<span v-if="msg.role==='assistant' && msg.totalMs != null"> · {{ msg.totalMs }}ms</span></div>
         </div>
@@ -152,10 +157,11 @@ createApp({
       {id:'judge',icon:'⚖️',label:'判断',status:'',latency:null},
       {id:'generate',icon:'✨',label:'生成',status:'',latency:null},
     ],
+    quickQueries:['凤凰项目技术选型的结论是什么？','W4A8量化效果如何？','AccessGuard权限模型是什么？','ChromaDB和ES怎么选？','Cross-Encoder提升多少？'],
   }},
   mounted(){this.checkHealth();this.newConversation()},
   methods:{
-    newConversation(){this.messages=[];this.conversations.unshift({title:'新对话',time:this.time(),messages:[]});this.activeConv=0;this.streamingMsg=null},
+    newConversation(){this.messages=[];this.resetPipeline();this.conversations.unshift({title:'新对话',time:this.time(),messages:[]});this.activeConv=0;this.streamingMsg=null},
     switchConv(i){const c=this.conversations[i];if(!c)return;this.messages=c.messages;this.activeConv=i},
     async checkHealth(){try{const r=await fetch('/health');const d=await r.json();this.statusText='后端正常 · '+(d.model||d.backend||'local');this.statusDot='ok'}catch(e){this.statusText='未连接——请先启动服务';this.statusDot='err'}},
     resetPipeline(){this.pipelineNodes.forEach(n=>{n.status='';n.latency=null})},
@@ -163,7 +169,7 @@ createApp({
     fileName(s){var f=(s.file||'').replace(/\\/g,'/').split('/').pop();return f||'文档'},
     cleanThink(t){return (t||'').replace(/<\/?think>/g,'').trim()},
     fmtMs(v){return v!=null?Math.round(v):null},
-    openSource(s){var fp=(s.file||'').replace(/\\/g,'/');var dir=fp.substring(0,fp.lastIndexOf('/'));if(dir)fetch('/open-file?path='+encodeURIComponent(dir)).catch(()=>{})},
+    openSource(s){var fp=(s.file||'');if(fp)fetch('/open-file?path='+encodeURIComponent(fp)).catch(()=>{})},
     async sendQuery(){
       var q=this.query.trim();if(!q||this.loading)return
       this.loading=true;this.resetPipeline();this.pipelineNodes[0].status='active'
