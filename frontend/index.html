@@ -135,7 +135,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div class="msg-bubble">{{ msg.content }}</div>
       <div v-if="msg.sources && msg.sources.length" class="sources" style="align-self:flex-start">
-        <span v-for="s in msg.sources" :key="s.date" class="source-tag">📎 {{ s.date || s.participants || s.content?.slice(0,20) }}</span>
+        <span v-for="(s,si) in msg.sources" :key="si" class="source-tag">📎 {{ cleanSource(s) }}</span>
       </div>
       <div class="msg-meta">{{ msg.role==='user' ? '你' : 'TeamMind' }} · {{ msg.time }}</div>
     </div>
@@ -211,22 +211,33 @@ createApp({
             catch(e){}
           }
         }
-        // Get final answer
+        // Get final answer + sources
         const syncRes=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})})
         const syncData=await syncRes.json()
-        if(!this.messages.find(m=>m.content===syncData.answer))
-          this.messages.push({role:'assistant',content:syncData.answer,thinking:thinking||undefined,thinkMs,time:this.time(),sources:(syncData.sources||[]).slice(0,5)})
+        // Replace streaming placeholder with final answer
+        var last=this.messages[this.messages.length-1]
+        if(last&&last.role==='assistant'&&last._streaming){last.content=syncData.answer;delete last._streaming;last.sources=(syncData.sources||[]).slice(0,5)}
+        else if(!this.messages.find(m=>m.content===syncData.answer))
+          this.messages.push({role:'assistant',content:syncData.answer,sources:(syncData.sources||[]).slice(0,5),time:this.time()})
         this.pipelineNodes.forEach(n=>n.status='done')
         this.statusText=`已连接 · ${Date.now()-t0}ms`
       }catch(e){this.messages.push({role:'assistant',content:'查询失败: '+e.message,time:this.time()});this.resetPipeline();this.statusDot='err'}
       finally{this.loading=false;if(this.conversations[this.activeConv])this.conversations[this.activeConv].messages=this.messages;this.$nextTick(()=>{const c=this.$refs.chatContainer;if(c)c.scrollTop=c.scrollHeight})}
     },
+    cleanSource(s){var t=(s.content||'').replace(/#\s*LEVEL:\s*\w+\s*#?/gi,'').replace(/^[\s\n\r]+/,'').slice(0,30);return t||'文档片段'},
     handleSSE(evt,t0){
       switch(evt.event){
-        case'router':this.pipelineNodes[0].status='done';this.pipelineNodes[1].status='active';break
-        case'retrieve':this.pipelineNodes[1].status='done';this.pipelineNodes[2].status='active';break
-        case'judge':this.pipelineNodes[2].status='done';this.pipelineNodes[3].status='active';break
-        case'generate':this.pipelineNodes[3].status='done';break
+        case'router':this.pipelineNodes[0].status='done';this.pipelineNodes[0].latency=evt.latency_ms||null;this.pipelineNodes[1].status='active';break
+        case'retrieve':this.pipelineNodes[1].status='done';this.pipelineNodes[1].latency=evt.latency_ms||null;this.pipelineNodes[2].status='active';break
+        case'judge':this.pipelineNodes[2].status='done';this.pipelineNodes[2].latency=evt.latency_ms||null;this.pipelineNodes[3].status='active';break
+        case'generate':this.pipelineNodes[3].status='done';this.pipelineNodes[3].latency=evt.latency_ms||null;
+          // 实时显示流式内容
+          var data=evt.data||'';if(data&&typeof data==='string'&&data.trim()){
+            var last=this.messages[this.messages.length-1];
+            if(last&&last.role==='assistant'&&last._streaming){last.content=data;last._streaming=true}
+            else{this.messages.push({role:'assistant',content:data,_streaming:true,time:this.time()})}
+          }
+          break
       }
     },
   }
