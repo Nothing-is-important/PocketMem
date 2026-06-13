@@ -49,6 +49,9 @@ class VectorStore:
         ids = [c.chunk_id for c in chunks]
         documents = [c.content for c in chunks]
         metadatas = [_sanitize_metadata(c.metadata) for c in chunks]
+        # DEBUG
+        if chunks and metadatas:
+            print(f"[add_chunks] first meta keys={list(chunks[0].metadata.keys())[:8] if hasattr(chunks[0], 'metadata') else 'NO_META'}")
 
         # 如果有自定义 embedding 函数，预计算 embedding
         # 避免 ChromaDB 尝试用默认模型下载
