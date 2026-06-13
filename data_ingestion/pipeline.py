@@ -10,7 +10,6 @@ from typing import List, Optional
 from .chunker import ConversationChunker, DocumentChunk
 from .markdown_loader import load_markdown
 from .pdf_loader import load_pdf
-from .txt_parser import filter_text_messages, parse_text_export
 
 
 SUPPORTED_EXTENSIONS = {
@@ -61,8 +60,6 @@ class IngestionPipeline:
             source_type = self._detect_source_type(filepath)
 
         if source_type == "mail":
-            return self._ingest_mail(filepath)
-        elif source_type == "mail":
             return self._ingest_mail(filepath)
         elif source_type == "markdown":
             return load_markdown(filepath, self.chunker)
@@ -126,10 +123,9 @@ class IngestionPipeline:
         return unique
 
     def _ingest_mail(self, filepath: str) -> List[DocumentChunk]:
-        """摄取文本文件。"""
-        chat_name = Path(filepath).stem
-        messages = parse_text_export(filepath, chat_name=chat_name)
-        text_messages = filter_text_messages(messages)
-        print(f"  [{chat_name}] 解析 {len(messages)} 条消息，"
-              f"其中 {len(text_messages)} 条文本消息")
-        return self.chunker.chunk_messages(text_messages, source_file=filepath)
+        """摄取邮件文件。"""
+        from .mail_parser import load_mail
+        chunks = load_mail(filepath, self.chunker)
+        if chunks:
+            print(f"  [OK] {Path(filepath).name}: {len(chunks)} chunks")
+        return chunks
