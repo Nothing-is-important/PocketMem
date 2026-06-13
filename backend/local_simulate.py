@@ -8,10 +8,14 @@
 """
 
 import time
+import warnings
 from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
+
+# Qwen3 + transformers 5.x: do_sample=True 时 temperature/top_p/top_k 产生无效标志警告
+warnings.filterwarnings("ignore", message=".*generation flags are not valid.*")
 import torch
 from sentence_transformers import SentenceTransformer
 from transformers import AutoProcessor, AutoTokenizer, GenerationConfig

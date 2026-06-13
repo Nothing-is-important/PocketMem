@@ -301,7 +301,8 @@ async def ask_stream(req: AskRequest, request: Request):
                 if sources:
                     yield {"data": json.dumps({"event": "sources", "data": [
                         {"content": s.get("content", "")[:200],
-                         "file": s.get("metadata", {}).get("source_file", "")}
+                         "file": s.get("metadata", {}).get("source_file", ""),
+                         "name": (s.get("metadata", {}).get("source_file", "") or "").replace("\\","/").split("/")[-1] or None}
                         for s in sources[:5]
                     ]})}
 
