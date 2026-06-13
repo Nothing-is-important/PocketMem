@@ -87,8 +87,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text2)}
 .empty-state .icon{font-size:40px}
 .empty-state p{font-size:14px;max-width:400px;text-align:center;line-height:1.6}
-.quick-queries{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:500px}
-.quick-q{padding:8px 16px;border-radius:8px;font-size:13px;background:var(--surface);color:var(--text2);cursor:pointer;border:1px solid var(--border);transition:.2s}
+.quick-queries{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:700px;width:100%}
+.quick-q{padding:10px 14px;border-radius:8px;font-size:13px;background:var(--surface);color:var(--text2);cursor:pointer;border:1px solid var(--border);transition:.2s;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .quick-q:hover{border-color:var(--accent);color:var(--text)}
 
 @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -168,7 +168,7 @@ createApp({
       {id:'judge',icon:'⚖️',label:'判断',status:'',latency:null},
       {id:'generate',icon:'✨',label:'生成',status:'',latency:null},
     ],
-    quickQueries:['凤凰项目技术选型的结论是什么？','W4A8量化效果如何？','AccessGuard权限模型是什么？','ChromaDB和ES怎么选？','Cross-Encoder提升多少？'],
+    quickQueries:['凤凰项目技术选型结论？','W4A8量化效果如何？','AccessGuard权限模型？','ChromaDB和ES怎么选？','Cross-Encoder提升？','系统安全评估发现了什么？','昆仑项目GPU成本？'],
   }},
   mounted(){this.checkHealth();this.newConversation()},
   methods:{
