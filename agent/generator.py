@@ -23,34 +23,30 @@ def build_thinking_messages(state: AgentState) -> list:
 
     # System prompt：企业知识助手
     system_prompt = (
-        "你是企业知识助手。严格根据提供的文档内容回答问题。"
-        "每条回答必须引用具体的文档来源。"
-        "如果文档中没有相关信息，直接说'文档中未提及'，不要猜测或编造。"
-        "回答简洁、专业，使用企业文档的语言风格。"
+        "你是企业知识助手。严格根据下面提供的文档内容回答问题。"
+        "回答中不要标注来源编号或引用标记——来源会由系统自动附加在回答下方。"
+        "如果文档中没有相关信息，直接说'文档中未提及'，不要猜测编造。"
+        "回答简洁专业。"
     )
 
-    # 用户消息：拼接记忆上下文 + 查询
+    # 用户消息：拼接文档上下文 + 查询
     user_parts = []
     if temporal_context and temporal_context != "无时间信息":
         user_parts.append(f"时间范围：{temporal_context}")
 
     if memory_context:
-        user_parts.append("相关记忆片段：")
+        user_parts.append("相关文档：")
         for i, item in enumerate(memory_context[:5]):
             content = item.get("content", "")[:300]
             meta = item.get("metadata", {})
-            ts = meta.get("timestamp", "")[:10] if meta.get("timestamp") else ""
-            participants = meta.get("participants", "")
-            if isinstance(participants, list):
-                participants = ", ".join(participants)
+            src = meta.get("source_file", "") or meta.get("file_name", "") or ""
+            fname = src.replace("\\","/").split("/")[-1] if src else ""
             label = f"[{i+1}]"
-            if ts:
-                label += f" {ts}"
-            if participants:
-                label += f" ({participants})"
+            if fname:
+                label += f" {fname}"
             user_parts.append(f"{label}\n{content}")
     else:
-        user_parts.append("（未找到相关记忆片段）")
+        user_parts.append("（未找到相关文档）")
 
     # 多轮对话历史
     if conv_history:
