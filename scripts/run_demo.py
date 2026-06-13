@@ -3,10 +3,14 @@
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 # Windows GBK 终端 → UTF-8
 sys.stdout.reconfigure(encoding='utf-8')
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 启动日志系统（控制台+文件双输出，仅保留最后一次）
+from utils.logging import setup_logging
+setup_logging()
 
 
 def setup():
