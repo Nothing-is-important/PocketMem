@@ -112,7 +112,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     <div class="main-col">
-      <div class="chat" ref="chatContainer" @click="onChatClick" @mouseover="onChatHover" @mouseout="onChatOut">
+      <div class="chat" ref="chatContainer">
         <div v-if="!messages.length" class="empty-state">
           <div class="icon">🏢</div>
           <p>企业知识库已就绪</p>
@@ -128,7 +128,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
           <div class="msg-bubble">
             <span v-if="msg.role==='assistant' && !msg.content && (msg._thinkingStream != null || msg.thinking) && !msg._done" class="thinking-indicator">正在思考<span class="dot-anim"><i>.</i><i>.</i><i>.</i></span></span>
-            <span v-else-if="msg.content" v-html="renderCitations(msg)"></span>
+            <template v-else-if="msg.content">
+              <template v-for="(seg,si) in splitContent(msg)" :key="si">
+                <span v-if="seg.cite" class="cite-ref" @click.stop="openCite(seg.idx,msg)" @mouseenter.stop="showCitePopupEv($event,seg.idx,msg)" @mouseleave.stop="hideSourcePopup">[{{ seg.num }}]</span>
+                <span v-else>{{ seg.text }}</span>
+              </template>
+            </template>
           </div>
           <div v-if="showSource && hoveredSource" class="source-popup" :style="popupStyle">{{ hoveredSource.name || hoveredSource.file || '' }}</div>
           <div class="msg-meta">{{ msg.role==='user'?'你':'TeamMind' }} · {{ msg.time }}<span v-if="msg.role==='assistant' && msg.totalMs != null"> · {{ msg.totalMs }}ms</span></div>
@@ -177,13 +182,10 @@ createApp({
     time(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})},
     fileName(s){var f=(s.file||'').replace(/\\/g,'/').split('/').pop();return f||'文档'},
     cleanThink(t){return (t||'').replace(/<\/?think>/g,'').trim()},
-    renderCitations(msg){var t=msg.content||'';if(!msg.sources||!msg.sources.length)return t.replace(/</g,'&lt;');var midx=this.messages.indexOf(msg);return t.replace(/\[(\d+)\]/g,function(m,num){var idx=parseInt(num)-1;var s=msg.sources[idx];if(!s)return m;return'<span class="cite-ref" data-idx="'+idx+'" data-midx="'+midx+'">['+num+']</span>'})},
-    showCitePopup(e,idx,msg){var s=(msg.sources||[])[idx];if(!s)return;this.hoveredSource={name:this.fileName(s),file:s.file};this.showSource=true;this.popupStyle={left:(e.clientX+12)+'px',top:(e.clientY-10)+'px'}},
+    splitContent(msg){var t=msg.content||'';if(!msg.sources||!msg.sources.length)return[{text:t}];var re=/\[(\d+)\]/g,segs=[],last=0,m;while((m=re.exec(t))!==null){if(m.index>last)segs.push({text:t.slice(last,m.index)});var idx=parseInt(m[1])-1;if(msg.sources[idx])segs.push({cite:true,num:m[1],idx:idx});else segs.push({text:m[0]});last=m.index+m[0].length}if(last<t.length)segs.push({text:t.slice(last)});return segs},
+    showCitePopupEv(e,idx,msg){var s=(msg.sources||[])[idx];if(!s)return;this.hoveredSource={name:this.fileName(s),file:s.file};this.showSource=true;this.popupStyle={left:(e.clientX+12)+'px',top:(e.clientY-10)+'px'}},
     hideSourcePopup(){this.showSource=false;this.hoveredSource=null},
     openCite(idx,msg){var s=(msg.sources||[])[idx];if(s)this.openSource(s);this.hideSourcePopup()},
-    onChatClick(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var midx=parseInt(el.dataset.midx);if(!isNaN(idx)&&!isNaN(midx)){var msg=this.messages[midx];if(msg)this.openCite(idx,msg)}},
-    onChatHover(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var midx=parseInt(el.dataset.midx);if(!isNaN(idx)&&!isNaN(midx)){var msg=this.messages[midx];if(msg)this.showCitePopup(e,idx,msg)}},
-    onChatOut(e){if(e.target.closest('.cite-ref'))this.hideSourcePopup()},
     fmtMs(v){return v!=null?Math.round(v):null},
     openSource(s){var fp=(s.file||'');if(fp)fetch('/open-file?path='+encodeURIComponent(fp)).catch(()=>{})},
     async sendQuery(){
