@@ -117,7 +117,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
 
         <div v-for="(msg,idx) in messages" :key="idx" :class="['msg',msg.role]">
-          <div v-if="msg.role==='assistant' && (msg.thinking || msg._thinkingStream)" class="think-block">
+          <div v-if="msg.role==='assistant' && (msg.thinking || msg._thinkingStream != null)" class="think-block">
             <div class="think-label">💭 思考过程<span v-if="msg.thinkMs != null"> ({{ msg.thinkMs }}ms)</span></div>
             <div :class="['think-content',{streaming:msg._thinkingStream}]">{{ msg.thinking || msg._thinkingStream }}</div>
           </div>
@@ -215,12 +215,12 @@ createApp({
             if(etype==='router'){this.pipelineNodes[0].status='done';this.pipelineNodes[0].latency=this.fmtMs(evt.latency_ms);this.pipelineNodes[1].status='active'}
             else if(etype==='retrieve'){this.pipelineNodes[1].status='done';this.pipelineNodes[1].latency=this.fmtMs(evt.latency_ms);this.pipelineNodes[2].status='active'}
             else if(etype==='judge'){this.pipelineNodes[2].status='done';this.pipelineNodes[2].latency=this.fmtMs(evt.latency_ms);this.pipelineNodes[3].status='active'}
-            else if(etype==='think_start'){thinkT0=Date.now();thinking='';this.streamingMsg=this.messages[this.messages.length]={role:'assistant',content:'',_thinkingStream:'',time:this.time()}}
+            else if(etype==='think_start'){thinkT0=Date.now();thinking='';this.messages.push({role:'assistant',content:'',_thinkingStream:'.',time:this.time()});this.streamingMsg=this.messages[this.messages.length-1]}
             else if(etype==='think_token'){thinking+=(evt.data||'');if(this.streamingMsg)this.streamingMsg._thinkingStream=this.cleanThink(thinking)}
-            else if(etype==='think_end'){if(this.streamingMsg){this.streamingMsg.thinking=this.cleanThink(thinking);this.streamingMsg.thinkMs=this.fmtMs(Date.now()-thinkT0);delete this.streamingMsg._thinkingStream}}
+            else if(etype==='think_end'){if(this.streamingMsg){this.streamingMsg.thinking=this.cleanThink(thinking);this.streamingMsg.thinkMs=this.fmtMs(Date.now()-thinkT0);delete this.streamingMsg._thinkingStream;this.messages=this.messages.slice()}}
             else if(etype==='answer_token'){answer+=(evt.data||'');if(this.streamingMsg)this.streamingMsg.content=answer}
             else if(etype==='done'){this.pipelineNodes[3].status='done';this.pipelineNodes[3].latency=this.fmtMs(Date.now()-t0)
-              if(this.streamingMsg){this.streamingMsg.sources=sources;this.streamingMsg.time=this.time();this.streamingMsg.totalMs=this.fmtMs(Date.now()-t0);this.streamingMsg=null}}
+              if(this.streamingMsg){this.streamingMsg.sources=sources;this.streamingMsg.time=this.time();this.streamingMsg.totalMs=this.fmtMs(Date.now()-t0);this.messages=this.messages.slice();this.streamingMsg=null}}
             else if(etype==='sources'){sources=(evt.data||[]).slice(0,5)}
           }
         }
