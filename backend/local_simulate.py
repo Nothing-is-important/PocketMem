@@ -403,10 +403,7 @@ class LocalSimulateBackend(InferenceBackend):
             generated_ids = self._llm_model.generate(
                 **inputs,
                 max_new_tokens=max_tokens,
-                do_sample=False,  # 1.5B 小模型采样模式输出失控，保持贪心解码
-                temperature=0.7,
-                top_p=0.8,
-                top_k=20,
+                do_sample=False,  # RAG场景事实性问答：贪心解码，确定性输出
                 repetition_penalty=1.1,
                 no_repeat_ngram_size=3,
                 eos_token_id=self._llm_tokenizer.eos_token_id,

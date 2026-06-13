@@ -204,10 +204,9 @@ async def ask_stream(req: AskRequest, request: Request):
                     results = node_state.get("retrieval_results", [])
                     latency_stats = node_state.get("latency_stats", {})
                     _log_event("retrieve", f"检索到{len(results)}条", count=len(results))
-                    yield {"data": json.dumps({"event": "retrieve", "data": {
-                        "count": len(results),
+                    yield {"data": json.dumps({"event": "retrieve",
                         "latency_ms": latency_stats.get("retrieval_ms", 0),
-                    }})}
+                        "data": {"count": len(results)}})}
                     await asyncio.sleep(0.3)
                 elif node_name == "judge":
                     ctx_count = len(node_state.get("memory_context", []))
@@ -215,11 +214,9 @@ async def ask_stream(req: AskRequest, request: Request):
                     latency_stats = node_state.get("latency_stats", {})
                     _log_event("judge", f"相关{ctx_count}条, 充分={sufficient}",
                                relevant_count=ctx_count, sufficient=sufficient)
-                    yield {"data": json.dumps({"event": "judge", "data": {
-                        "relevant_count": ctx_count,
-                        "sufficient": sufficient,
+                    yield {"data": json.dumps({"event": "judge",
                         "latency_ms": latency_stats.get("judge_ms", 0),
-                    }})}
+                        "data": {"relevant_count": ctx_count, "sufficient": sufficient}})}
 
                     # 保存状态并退出 astream，后续由 SSE handler 直接生成
                     gen_state = node_state
