@@ -177,7 +177,7 @@ createApp({
     async checkHealth(){try{const r=await fetch('/health');const d=await r.json();this.statusText='后端正常 · '+(d.model||d.backend||'local');this.statusDot='ok'}catch(e){this.statusText='未连接——请先启动服务';this.statusDot='err'}},
     resetPipeline(){this.pipelineNodes.forEach(n=>{n.status='';n.latency=null})},
     time(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})},
-    fileName(s){var f=(s.file||'').replace(/\\/g,'/').split('/').pop();return f||'文档'},
+    fileName(s){var f=(s.name||s.file||'');if(f){var p=f.replace(/\\/g,'/').split('/').pop();if(p)return p}return'文档'},
     cleanThink(t){return (t||'').replace(/<\/?think>/g,'').trim()},
     fmtMs(v){return v!=null?Math.round(v):null},
     openSource(s){var fp=(s.file||'');if(fp)fetch('/open-file?path='+encodeURIComponent(fp)).catch(()=>{})},

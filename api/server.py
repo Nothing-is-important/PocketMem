@@ -300,10 +300,7 @@ async def ask_stream(req: AskRequest, request: Request):
                 sources = gen_state.get("memory_context", [])
                 if sources:
                     yield {"data": json.dumps({"event": "sources", "data": [
-                        {"content": s.get("content", "")[:200],
-                         "file": s.get("metadata", {}).get("source_file", ""),
-                         "name": (s.get("metadata", {}).get("source_file", "") or "").replace("\\","/").split("/")[-1] or None}
-                        for s in sources[:5]
+                        _build_source_item(s) for s in sources[:5]
                     ]})}
 
                 yield {"data": json.dumps({"event": "generate", "data": "", "latency_ms": gen_latency})}
@@ -461,6 +458,17 @@ async def refresh_suggestions(request: Request):
     thread = threading.Thread(target=_run_llm_refresh, daemon=True)
     thread.start()
     return {"status": "refreshing"}
+
+
+def _build_source_item(s):
+    """构建来源项，确保 file 和 name 字段非空。"""
+    meta = s.get("metadata", {})
+    file = meta.get("source_file", "") or meta.get("file_name", "") or ""
+    if file:
+        name = file.replace("\\", "/").split("/")[-1]
+    else:
+        name = meta.get("title", "") or meta.get("file_name", "") or "文档"
+    return {"content": s.get("content", "")[:200], "file": file or name, "name": name}
 
 
 def invalidate_suggestion_cache():
