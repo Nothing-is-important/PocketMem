@@ -164,7 +164,7 @@ createApp({
   methods:{
     newConversation(){this.messages=[];this.conversations.unshift({title:'新对话',time:this.time(),messages:[]});this.activeConv=0;this.streamingMsg=null},
     switchConv(i){const c=this.conversations[i];if(!c)return;this.messages=c.messages;this.activeConv=i},
-    async checkHealth(){try{const r=await fetch('/health');const d=await r.json();this.statusText='后端正常 · '+(d.backend||'local');this.statusDot='ok'}catch(e){this.statusText='未连接——请先启动服务';this.statusDot='err'}},
+    async checkHealth(){try{const r=await fetch('/health');const d=await r.json();this.statusText='后端正常 · '+(d.model||d.backend||'local');this.statusDot='ok'}catch(e){this.statusText='未连接——请先启动服务';this.statusDot='err'}},
     resetPipeline(){this.pipelineNodes.forEach(n=>{n.status='';n.latency=null})},
     time(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})},
     cleanSource(s){var t=(s.content||'').replace(/#\s*LEVEL:\s*\w+\s*#?/gi,'').replace(/^[\s\n\r#]+/,'').replace(/##\s*\S+/g,'').slice(0,25);return t||'文档片段'},

@@ -99,7 +99,23 @@ async def health(request: Request):
     backend = getattr(request.app.state, "backend", None)
     backend_type = backend.backend_type if backend else "not_initialized"
     device = getattr(backend, "device", "unknown") if backend else "unknown"
-    return {"status": "ok", "backend": backend_type, "device": device}
+    # 提取模型可读名称
+    model_name = ""
+    if backend:
+        llm = getattr(backend, '_llm_model', None) or getattr(backend, '_local', None)
+        if llm and hasattr(llm, 'config'):
+            model_name = getattr(llm.config, '_name_or_path', '') or getattr(llm.config, 'model_type', '')
+        elif llm and hasattr(getattr(llm, '_local', None), 'config'):
+            model_name = getattr(llm._local.config, '_name_or_path', '')
+    if not model_name and backend:
+        model_name = backend_type
+    # 友好名称映射
+    friendly = {"local_simulate": "Qwen3", "vllm": "vLLM", "dual_mode": "Dual"}
+    display = friendly.get(backend_type, backend_type)
+    if "4B" in str(model_name): display = "Qwen3-4B"
+    elif "8B" in str(model_name): display = "Qwen3-8B"
+    elif "1.5B" in str(model_name) or "1.7B" in str(model_name): display = "Qwen3-1.7B"
+    return {"status": "ok", "backend": backend_type, "model": display, "device": device}
 
 
 @app.get("/memory/stats", response_model=MemoryStats)
