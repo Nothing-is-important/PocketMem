@@ -124,9 +124,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <div class="msg-bubble">{{ msg.content || '思考中...' }}</div>
         <div v-if="msg.sources && msg.sources.length" class="sources" style="align-self:flex-start">
-          <span v-for="(s,si) in msg.sources" :key="si" class="source-tag" :title="cleanSourceFull(s)">📎 {{ cleanSource(s) }}</span>
+          <span v-for="(s,si) in msg.sources" :key="si" class="source-tag" :title="cleanSourceFull(s)" @click="openSource(s)" style="cursor:pointer">📎 {{ cleanSource(s) }}</span>
         </div>
-        <div class="msg-meta">{{ msg.role==='user'?'你':'TeamMind' }} · {{ msg.time }}</div>
+        <div class="msg-meta">{{ msg.role==='user'?'你':'TeamMind' }} · {{ msg.time }}<span v-if="msg.role==='assistant' && msg.totalMs != null"> · {{ msg.totalMs }}ms</span></div>
       </div>
 
       <div v-if="loading && !streamingMsg" class="typing"><span></span><span></span><span></span></div>
@@ -169,11 +169,14 @@ createApp({
   methods:{
     newConversation(){this.messages=[];this.conversations.unshift({title:'新对话',time:this.time(),messages:[]});this.activeConv=0;this.streamingMsg=null},
     switchConv(i){const c=this.conversations[i];if(!c)return;this.messages=c.messages;this.activeConv=i},
-    async checkHealth(){try{const r=await fetch('/health');const d=await r.json();this.statusText=`已连接 · ${d.backend||'ok'}`;this.statusDot='ok'}catch(e){this.statusText='未连接——请先启动服务';this.statusDot='err'}},
+    async checkHealth(){try{const r=await fetch('/health');const d=await r.json();this.statusText=`后端正常 · ${d.backend||'local'}`;this.statusDot='ok'}catch(e){this.statusText='未连接——请先启动服务';this.statusDot='err'}},
     resetPipeline(){this.pipelineNodes.forEach(n=>{n.status='';n.latency=null})},
     time(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})},
     cleanSource(s){var t=(s.content||'').replace(/#\s*LEVEL:\s*\w+\s*#?/gi,'').replace(/^[\s\n\r#]+/,'').replace(/##\s*\S+/g,'').slice(0,25);return t||'文档片段'},
     cleanSourceFull(s){return (s.content||'').replace(/#\s*LEVEL:\s*\w+\s*#?/gi,'').slice(0,60)},
+    cleanThink(t){return (t||'').replace(/<\/?think>/g,'').trim()},
+    fmtMs(v){return v != null ? Math.round(v) : null},
+    openSource(s){var fp=s.file||'';if(fp) fetch('/open-file?path='+encodeURIComponent(fp)).catch(()=>{})},
 
     async sendQuery(){
       var q=this.query.trim();if(!q||this.loading)return
@@ -195,20 +198,19 @@ createApp({
             try{var evt=JSON.parse(d)}catch(e){continue}
             var etype=evt.event||''
 
-            if(etype==='router'){this.pipelineNodes[0].status='done';this.pipelineNodes[0].latency=evt.latency_ms||null;this.pipelineNodes[1].status='active'}
-            else if(etype==='retrieve'){this.pipelineNodes[1].status='done';this.pipelineNodes[1].latency=evt.latency_ms||null;this.pipelineNodes[2].status='active'}
-            else if(etype==='judge'){this.pipelineNodes[2].status='done';this.pipelineNodes[2].latency=evt.latency_ms||null;this.pipelineNodes[3].status='active'}
+            if(etype==='router'){this.pipelineNodes[0].status='done';this.pipelineNodes[0].latency=this.fmtMs(evt.latency_ms);this.pipelineNodes[1].status='active'}
+            else if(etype==='retrieve'){this.pipelineNodes[1].status='done';this.pipelineNodes[1].latency=this.fmtMs(evt.latency_ms);this.pipelineNodes[2].status='active'}
+            else if(etype==='judge'){this.pipelineNodes[2].status='done';this.pipelineNodes[2].latency=this.fmtMs(evt.latency_ms);this.pipelineNodes[3].status='active'}
             else if(etype==='think_start'){thinkT0=Date.now();thinking='';this.streamingMsg=this.messages[this.messages.length]={role:'assistant',content:'',_thinkingStream:'',time:this.time()}}
-            else if(etype==='think_token'){thinking+=(evt.data||'');if(this.streamingMsg)this.streamingMsg._thinkingStream=thinking}
-            else if(etype==='think_end'){if(this.streamingMsg){this.streamingMsg.thinking=thinking;this.streamingMsg.thinkMs=Date.now()-thinkT0;delete this.streamingMsg._thinkingStream}}
+            else if(etype==='think_token'){thinking+=(evt.data||'');if(this.streamingMsg)this.streamingMsg._thinkingStream=this.cleanThink(thinking)}
+            else if(etype==='think_end'){if(this.streamingMsg){this.streamingMsg.thinking=this.cleanThink(thinking);this.streamingMsg.thinkMs=this.fmtMs(Date.now()-thinkT0);delete this.streamingMsg._thinkingStream}}
             else if(etype==='answer_token'){answer+=(evt.data||'');if(this.streamingMsg)this.streamingMsg.content=answer}
-            else if(etype==='done'){this.pipelineNodes[3].status='done';this.pipelineNodes[3].latency=Date.now()-t0;
-              if(this.streamingMsg){this.streamingMsg.sources=sources;this.streamingMsg.time=this.time();this.streamingMsg=null}
+            else if(etype==='done'){this.pipelineNodes[3].status='done';this.pipelineNodes[3].latency=this.fmtMs(Date.now()-t0);
+              if(this.streamingMsg){this.streamingMsg.sources=sources;this.streamingMsg.time=this.time();this.streamingMsg.totalMs=this.fmtMs(Date.now()-t0);this.streamingMsg=null}
             }
             else if(etype==='sources'){sources=(evt.data||[]).slice(0,5)}
           }
         }
-        this.statusText=`已连接 · ${Date.now()-t0}ms`
       }catch(e){this.messages.push({role:'assistant',content:'查询失败: '+e.message,time:this.time()});this.resetPipeline();this.statusDot='err'}
       finally{this.loading=false;this.streamingMsg=null;if(this.conversations[this.activeConv])this.conversations[this.activeConv].messages=this.messages;this.$nextTick(()=>{var c=this.$refs.chatContainer;if(c)c.scrollTop=c.scrollHeight})}
     },

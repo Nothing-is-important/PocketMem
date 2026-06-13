@@ -10,6 +10,7 @@
 """
 
 import json
+import os
 import re
 import asyncio
 import time
@@ -75,6 +76,22 @@ async def index():
         response.headers["Expires"] = "0"
         return response
     return {"message": "TeamMind API", "docs": "/docs"}
+
+
+@app.get("/open-file")
+async def open_file(path: str):
+    """在文件管理器中打开文件（Windows / macOS / Linux）。"""
+    import subprocess, sys
+    try:
+        if sys.platform == "win32":
+            os.startfile(os.path.abspath(path))
+        elif sys.platform == "darwin":
+            subprocess.run(["open", path])
+        else:
+            subprocess.run(["xdg-open", path])
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 @app.get("/health")
@@ -270,7 +287,9 @@ async def ask_stream(req: AskRequest, request: Request):
                 sources = gen_state.get("memory_context", [])
                 if sources:
                     yield {"data": json.dumps({"event": "sources", "data": [
-                        {"content": s.get("content", "")[:200]} for s in sources[:5]
+                        {"content": s.get("content", "")[:200],
+                         "file": s.get("metadata", {}).get("source_file", "")}
+                        for s in sources[:5]
                     ]})}
 
                 yield {"data": json.dumps({"event": "generate", "data": "", "latency_ms": gen_latency})}
