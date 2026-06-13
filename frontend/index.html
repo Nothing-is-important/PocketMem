@@ -128,9 +128,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
           <div class="msg-bubble">
             <span v-if="msg.role==='assistant' && !msg.content && (msg._thinkingStream != null || msg.thinking) && !msg._done" class="thinking-indicator">正在思考<span class="dot-anim"><i>.</i><i>.</i><i>.</i></span></span>
-            <span v-else-if="msg.content" v-html="renderCitations(msg)"></span>
+            <span v-else-if="msg.content">{{ msg.content }}</span>
           </div>
-          <div v-if="showSource && hoveredSource" class="source-popup" :style="popupStyle">{{ hoveredSource.content || hoveredSource.file || '' }}</div>
+          <div v-if="msg.role==='assistant' && msg.sources && msg.sources.length" class="sources">
+            <span v-for="(s,si) in msg.sources" :key="si" class="source-tag" @click="openSource(s)">🔗 {{ fileName(s) }}</span>
+          </div>
           <div class="msg-meta">{{ msg.role==='user'?'你':'TeamMind' }} · {{ msg.time }}<span v-if="msg.role==='assistant' && msg.totalMs != null"> · {{ msg.totalMs }}ms</span></div>
         </div>
 
@@ -159,7 +161,7 @@ const { createApp } = Vue;
 createApp({
   data(){return{
     query:'',loading:false,statusText:'检查连接...',statusDot:'err',
-    messages:[],conversations:[],activeConv:-1,streamingMsg:null,showSource:false,hoveredSource:null,popupStyle:{},
+    messages:[],conversations:[],activeConv:-1,streamingMsg:null,
     pipelineNodes:[
       {id:'router',icon:'🎯',label:'路由',status:'',latency:null},
       {id:'retrieve',icon:'🔍',label:'检索',status:'',latency:null},
@@ -168,12 +170,7 @@ createApp({
     ],
     quickQueries:['凤凰项目技术选型的结论是什么？','W4A8量化效果如何？','AccessGuard权限模型是什么？','ChromaDB和ES怎么选？','Cross-Encoder提升多少？'],
   }},
-  mounted(){this.checkHealth();this.newConversation();
-    var self=this;
-    this.$refs.chatContainer.addEventListener('mouseover',function(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var msgEl=el.closest('.msg');var msgIdx=Array.from(msgEl.parentNode.children).indexOf(msgEl);var msg=self.messages[msgIdx];if(msg&&msg.sources&&!isNaN(idx))self.showSourcePopup(e,idx,msg)})
-    this.$refs.chatContainer.addEventListener('mouseout',function(e){if(e.target.closest('.cite-ref'))self.hideSourcePopup()})
-    this.$refs.chatContainer.addEventListener('click',function(e){var el=e.target.closest('.cite-ref');if(!el)return;var idx=parseInt(el.dataset.idx);var msgEl=el.closest('.msg');var msgIdx=Array.from(msgEl.parentNode.children).indexOf(msgEl);var msg=self.messages[msgIdx];if(msg&&msg.sources&&!isNaN(idx))self.openSourceFile(e,idx,msg)})
-  },
+  mounted(){this.checkHealth();this.newConversation()},
   methods:{
     newConversation(){this.messages=[];this.resetPipeline();this.conversations.unshift({title:'新对话',time:this.time(),messages:[]});this.activeConv=0;this.streamingMsg=null},
     switchConv(i){const c=this.conversations[i];if(!c)return;this.messages=c.messages;this.activeConv=i},
@@ -182,25 +179,6 @@ createApp({
     time(){return new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})},
     fileName(s){var f=(s.file||'').replace(/\\/g,'/').split('/').pop();return f||'文档'},
     cleanThink(t){return (t||'').replace(/<\/?think>/g,'').trim()},
-    renderCitations(msg){
-      var text=msg.content||'';if(!msg.sources||!msg.sources.length)return this.escapeHtml(text)
-      return text.replace(/\[(\d+)\]/g,(m,num)=>{
-        var idx=parseInt(num)-1;var s=msg.sources[idx]
-        if(!s)return m
-        var fname=this.fileName(s)
-        return '<span class="cite-ref" data-idx="'+idx+'">['+num+']</span>'
-      })
-    },
-    escapeHtml(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML},
-    showSourcePopup(e,idx,msg){
-      var srcs=(msg||{}).sources||[];if(!srcs[idx])return
-      this.hoveredSource=srcs[idx];this.showSource=true;this.popupStyle={left:(e.clientX+12)+'px',top:(e.clientY-10)+'px'}
-    },
-    hideSourcePopup(){this.showSource=false;this.hoveredSource=null},
-    openSourceFile(e,idx,msg){
-      var srcs=(msg||{}).sources||[];if(!srcs[idx])return
-      this.openSource(srcs[idx]);this.hideSourcePopup()
-    },
     fmtMs(v){return v!=null?Math.round(v):null},
     openSource(s){var fp=(s.file||'');if(fp)fetch('/open-file?path='+encodeURIComponent(fp)).catch(()=>{})},
     async sendQuery(){
